@@ -219,6 +219,11 @@ login entry (the panel then stays closed). The log line
   (`main.tsx` picks by window label). `i18n.ts` holds the English and
   Spanish strings; `tokens.css` holds the web app's color tokens.
 - `scripts/install-local.sh`: build and install for the current Linux user.
+- `src-tauri/icons/`: the app icon. `icon.svg` is the source; the PNG
+  sizes and `icon.ico` (Windows) are rendered from it:
+  `for s in 16 32 48 64 128 256; do rsvg-convert -w $s -h $s icon.svg -o ${s}x${s}.png; done`,
+  `rsvg-convert -w 512 -h 512 icon.svg -o icon.png`, and
+  `magick 16x16.png 32x32.png 48x48.png 64x64.png 256x256.png icon.ico`.
 
 The web view has only Tauri's `core:default` permissions. It never sees the
 token or the screenshot bytes (only small previews; cropping sends a

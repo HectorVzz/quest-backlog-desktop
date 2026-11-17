@@ -48,12 +48,23 @@ export function Icon({ name, size = 18 }: { name: IconName | StatusKey; size?: n
   );
 }
 
-/** The app mark: a bookmark on an amber tile. */
+/** The app mark: the app icon (src-tauri/icons/icon.svg) in theme colors. */
 export function Mark({ size = 18 }: { size?: number }) {
   return (
-    <svg class="mark" viewBox="0 0 24 24" width={size} height={size} aria-hidden="true">
-      <rect width="24" height="24" rx="6" fill="var(--qb-color-accent)" />
-      <path d="M8 5.5h8v13l-4-3-4 3z" fill="var(--qb-color-on-accent)" />
+    <svg class="mark" viewBox="64 64 896 896" width={size} height={size} aria-hidden="true">
+      <rect x="64" y="64" width="896" height="896" rx="208" fill="var(--qb-color-accent)" />
+      <path
+        d="M376 224h272a40 40 0 0 1 40 40v536L512 678 336 800V264a40 40 0 0 1 40-40z"
+        fill="var(--qb-color-on-accent)"
+      />
+      <path
+        d="M424 448l64 64 120-128"
+        fill="none"
+        stroke="var(--qb-color-accent)"
+        stroke-width="60"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
     </svg>
   );
 }

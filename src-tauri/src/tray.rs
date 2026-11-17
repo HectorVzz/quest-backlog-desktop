@@ -60,11 +60,16 @@ mod linux {
         language: &'static str,
     }
 
-    /// The app icon as ARGB32, the format StatusNotifierItem expects.
-    fn icon() -> ksni::Icon {
-        let image = image::load_from_memory(include_bytes!("../icons/icon.png"))
-            .expect("bundled icon")
-            .into_rgba8();
+    /// The app icon in a few sizes, so the panel can pick a sharp one.
+    const ICON_SIZES: [&[u8]; 3] = [
+        include_bytes!("../icons/16x16.png"),
+        include_bytes!("../icons/32x32.png"),
+        include_bytes!("../icons/64x64.png"),
+    ];
+
+    /// One icon size as ARGB32, the format StatusNotifierItem expects.
+    fn icon(png: &[u8]) -> ksni::Icon {
+        let image = image::load_from_memory(png).expect("bundled icon").into_rgba8();
         let (width, height) = image.dimensions();
         let mut data = image.into_vec();
         for pixel in data.chunks_exact_mut(4) {
@@ -88,7 +93,7 @@ mod linux {
         }
 
         fn icon_pixmap(&self) -> Vec<ksni::Icon> {
-            vec![icon()]
+            ICON_SIZES.iter().map(|png| icon(png)).collect()
         }
 
         fn tool_tip(&self) -> ksni::ToolTip {
