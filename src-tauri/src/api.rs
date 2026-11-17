@@ -60,8 +60,23 @@ pub struct Game {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GameStatus {
     pub status: String,
+    #[serde(default)]
+    pub hours_played: Option<f64>,
+    #[serde(default)]
+    pub synced_with_steam: bool,
+    #[serde(default)]
+    pub steam_app_id: Option<i64>,
+}
+
+impl GameStatus {
+    /// Steam keeps this entry's hours: the server ignores hours sent
+    /// without `manualProgress`, which would unlink it from Steam.
+    pub fn steam_owned(&self) -> bool {
+        self.synced_with_steam || self.steam_app_id.is_some_and(|id| id > 0)
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -75,6 +90,9 @@ pub struct NewPost<'a> {
     pub spoiler: bool,
     /// JPEG bytes.
     pub image: Option<Vec<u8>>,
+    /// Makes it a status update post ("Started playing …"); needs a game.
+    pub status: Option<&'a str>,
+    pub hours_played: Option<f64>,
 }
 
 #[derive(Debug)]
@@ -304,14 +322,21 @@ impl Api {
         optional_json(response).await
     }
 
+    /// Saves the status, and the hours played when `hours_played` is set
+    /// (otherwise the server keeps them).
     pub async fn set_game_status(
         &self,
         token: &str,
         game_id: &str,
         status: &str,
+        hours_played: Option<f64>,
     ) -> Result<GameStatus, ApiError> {
+        let mut body = json!({ "gameId": game_id, "status": status });
+        if let Some(hours) = hours_played {
+            body["hoursPlayed"] = json!(hours);
+        }
         let response = bearer(self.client.post(self.endpoint(&["statuses"])), token)
-            .json(&json!({ "gameId": game_id, "status": status }))
+            .json(&body)
             .send()
             .await
             .map_err(network)?;
@@ -322,12 +347,19 @@ impl Api {
     pub async fn create_post(&self, token: &str, post: NewPost<'_>) -> Result<CreatedPost, PostError> {
         use reqwest::multipart::{Form, Part};
 
+        let kind = if post.status.is_some() { "status-update" } else { "text" };
         let mut form = Form::new()
             .text("content", post.content.to_string())
-            .text("type", "text")
+            .text("type", kind)
             .text("spoiler", post.spoiler.to_string());
         if let Some(game_id) = post.game_id {
             form = form.text("gameId", game_id.to_string());
+        }
+        if let Some(status) = post.status {
+            form = form.text("status", status.to_string());
+        }
+        if let Some(hours) = post.hours_played {
+            form = form.text("hoursPlayed", hours.to_string());
         }
         if let Some(image) = post.image {
             let part = Part::bytes(image)

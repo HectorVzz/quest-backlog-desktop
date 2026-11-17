@@ -29,15 +29,29 @@ struct AppInfo {
     version: &'static str,
     language: &'static str,
     hotkey: hotkey::HotkeyStatus,
+    /// Whether the first-run shortcut tips were dismissed.
+    tips_seen: bool,
 }
 
 #[tauri::command]
 fn get_app_info(app: AppHandle) -> AppInfo {
+    let settings = settings::current(&app);
     AppInfo {
         version: config::APP_VERSION,
-        language: settings::language(&settings::current(&app)),
+        language: settings::language(&settings),
         hotkey: hotkey::status(&app),
+        tips_seen: settings.tips_seen,
     }
+}
+
+#[tauri::command]
+fn dismiss_tips(app: AppHandle) -> Result<(), String> {
+    let mut settings = settings::current(&app);
+    if settings.tips_seen {
+        return Ok(());
+    }
+    settings.tips_seen = true;
+    settings::store(&app, settings)
 }
 
 #[tauri::command]
@@ -118,6 +132,7 @@ fn main() {
             compose::get_screenshot,
             compose::take_screenshot,
             compose::discard_screenshot,
+            compose::crop_screenshot,
             compose::create_post,
             compose::open_post,
             preferences::open_preferences,
@@ -130,7 +145,9 @@ fn main() {
             games::search_games,
             games::choose_game,
             games::set_game_status,
+            games::share_status,
             get_app_info,
+            dismiss_tips,
             get_auth,
             start_sign_in,
             cancel_sign_in,

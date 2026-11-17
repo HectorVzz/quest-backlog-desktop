@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Quest Backlog app icon: a bookmark with a check on an amber tile. -->
+  <rect x="64" y="64" width="896" height="896" rx="208" fill="#E9A23B"/>
+  <path d="M376 224h272a40 40 0 0 1 40 40v536L512 678 336 800V264a40 40 0 0 1 40-40z" fill="#1A1205"/>
+  <path d="M424 448l64 64 120-128" fill="none" stroke="#E9A23B" stroke-width="60" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

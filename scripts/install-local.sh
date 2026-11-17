@@ -2,7 +2,7 @@
 # Builds the desktop app and installs it for the current user on Linux:
 #   ~/.local/bin/quest-backlog-desktop
 #   ~/.local/share/applications/com.questbacklog.QuestBacklog.desktop  (launcher entry)
-#   ~/.local/share/icons/hicolor/32x32/apps/com.questbacklog.QuestBacklog.png
+#   ~/.local/share/icons/hicolor/<size>/apps/com.questbacklog.QuestBacklog.{png,svg}
 # The launcher entry's name must match the app identifier: it is how the
 # desktop's shortcut portal knows the app (KDE then lists the shortcuts
 # under "Quest Backlog" instead of the terminal that started it). It also
@@ -22,14 +22,24 @@ BIN_NAME="quest-backlog-desktop"
 BIN_DIR="${XDG_BIN_HOME:-$HOME/.local/bin}"
 DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}"
 DESKTOP_FILE="$DATA_DIR/applications/$APP_ID.desktop"
-ICON_FILE="$DATA_DIR/icons/hicolor/32x32/apps/$APP_ID.png"
+ICON_DIR="$DATA_DIR/icons/hicolor"
+ICON_SIZES=(16 32 48 64 128 256 512)
+
+icon_files() {
+  for size in "${ICON_SIZES[@]}"; do
+    echo "$ICON_DIR/${size}x${size}/apps/$APP_ID.png"
+  done
+  echo "$ICON_DIR/scalable/apps/$APP_ID.svg"
+}
 
 refresh_menus() {
   update-desktop-database -q "$DATA_DIR/applications" 2>/dev/null || true
+  gtk-update-icon-cache -q -t "$ICON_DIR" 2>/dev/null || true
 }
 
 if [[ "${1:-}" == "--uninstall" ]]; then
-  rm -f "$BIN_DIR/$BIN_NAME" "$DESKTOP_FILE" "$ICON_FILE"
+  rm -f "$BIN_DIR/$BIN_NAME" "$DESKTOP_FILE"
+  icon_files | xargs rm -f
   refresh_menus
   echo "Removed Quest Backlog. Settings stay in ~/.config/$APP_ID."
   exit 0
@@ -41,7 +51,12 @@ pnpm install --frozen-lockfile
 pnpm tauri build --no-bundle
 
 install -Dm755 "src-tauri/target/release/$BIN_NAME" "$BIN_DIR/$BIN_NAME"
-install -Dm644 "src-tauri/icons/icon.png" "$ICON_FILE"
+for size in "${ICON_SIZES[@]}"; do
+  source="src-tauri/icons/${size}x${size}.png"
+  [[ $size == 512 ]] && source="src-tauri/icons/icon.png"
+  install -Dm644 "$source" "$ICON_DIR/${size}x${size}/apps/$APP_ID.png"
+done
+install -Dm644 "src-tauri/icons/icon.svg" "$ICON_DIR/scalable/apps/$APP_ID.svg"
 mkdir -p "$(dirname "$DESKTOP_FILE")"
 cat > "$DESKTOP_FILE" <<EOF
 [Desktop Entry]

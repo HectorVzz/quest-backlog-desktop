@@ -23,6 +23,8 @@ pub struct Settings {
     pub screenshot_folder: Option<String>,
     /// "en" or "es"; anything else follows the system language.
     pub language: Option<String>,
+    /// The quick panel's first-run shortcut tips were dismissed.
+    pub tips_seen: bool,
 }
 
 impl Default for Settings {
@@ -35,6 +37,7 @@ impl Default for Settings {
             save_screenshots: false,
             screenshot_folder: None,
             language: None,
+            tips_seen: false,
         }
     }
 }

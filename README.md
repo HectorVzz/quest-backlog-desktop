@@ -3,8 +3,8 @@
 A small companion app for [Quest Backlog](https://quest-backlog.com) on
 Windows and Linux. It lives in the system tray, like Flameshot. Press a
 shortcut while playing and a quick panel opens over the game. From it you
-can update the game's status or post to Quest Backlog, with a screenshot of
-the game if you want one.
+can update the game's status and hours played, share the update to your
+feed, or post to Quest Backlog with a screenshot of the game.
 
 Status: in development, no releases yet. Tested on Linux (KDE Plasma,
 Wayland); the Windows build is not tested yet.
@@ -37,7 +37,8 @@ The app connects to two places only:
 
 - `quest-backlog.com`, the Quest Backlog API, and only when you do
   something: sign in, open the panel (to look up the detected game and your
-  status for it), search for a game, save a status or post.
+  status and hours for it), search for a game, save a status or hours, or
+  post.
 - `images.igdb.com`, to show game covers.
 
 What the server receives:
@@ -46,7 +47,8 @@ What the server receives:
   see them when you approve the sign-in and later under Connected devices on
   the website, where you can sign the app out.
 - A detected Steam game's app id, to look the game up.
-- What you choose to save or post: a status, text, a screenshot.
+- What you choose to save or post: a status, hours played, text, a
+  screenshot.
 
 The executables you matched to games (`games.json`) stay on your computer.
 
@@ -55,9 +57,19 @@ The executables you matched to games (`games.json`) stay on your computer.
 - **Tray icon:** left click opens or closes the quick panel; right click
   shows *Open quick panel*, *Screenshot a window and post…*,
   *Preferences…*, *Quit*. The app never sits in the taskbar.
-- **Quick panel:** always on top, Escape closes it. Two tabs: *Status*
-  (detected game, one-click status) and *Post* (text, game, screenshot,
-  spoiler).
+- **Quick panel:** always on top, Escape closes it. The detected game's
+  cover and title sit at the top. Two tabs: *Status* (one-click status; the
+  number keys 1 to 6 pick Playing, Completed, Platinum'd, Backlog, Dropped,
+  Wishlist) and *Post* (text, game, screenshot, spoiler; Ctrl+Enter posts).
+  The first time you open it, it lists these keys until you press *Got it*.
+- **Hours played:** under the status buttons; saved on Enter or when you
+  leave the field (empty keeps the saved hours). Games synced from Steam
+  show Steam's hours read-only, because typing hours there would unlink
+  them from Steam on Quest Backlog.
+- **Post update:** shares the game's current status to your feed, like
+  "Post update" on the website, with an editable sentence and your hours.
+  The "Saved as …" message offers it right after you change a status.
+  Nothing is shared unless you press *Post*.
 - **Preferences:** a normal window. Shortcuts, keeping a copy of screenshots
   and where, language (English or Spanish), start with the system.
 - **Shortcuts:** `Ctrl+Shift+G` opens the quick panel; `Ctrl+Shift+F12`
@@ -127,6 +139,11 @@ its message is shown as it is.
   and takes the keyboard back; the panel stays on screen.
 - *Choose window…* and the tray item show KWin's crosshair: click a window,
   Escape cancels.
+- *Crop* shows the whole screenshot: drag a box over the part to post, drag
+  the box to move it or its corners to resize it, then *Apply* (Enter).
+  Only the rectangle goes back to the Rust core, which cuts it from the
+  full-size capture and encodes it again; *Whole screenshot* undoes it. The
+  local PNG copy, when on, is always the whole capture.
 - KDE Plasma uses KWin's `org.kde.KWin.ScreenShot2` (no window frame, a few
   milliseconds). The launcher entry declares it in
   `X-KDE-DBUS-Restricted-Interfaces`, like Flameshot's.
@@ -147,12 +164,14 @@ them from Preferences:
   "screenshotHotkey": "Ctrl+Shift+F12",
   "saveScreenshots": false,
   "screenshotFolder": null,
-  "language": null
+  "language": null,
+  "tipsSeen": false
 }
 ```
 
 `screenshotFolder: null` means `<Pictures>/Quest Backlog`. `language` is
-`"en"`, `"es"` or `null` (the system language).
+`"en"`, `"es"` or `null` (the system language). `tipsSeen` turns into
+`true` when you dismiss the quick panel's shortcut list.
 
 ## Building
 
@@ -210,9 +229,15 @@ login entry (the panel then stays closed). The log line
   (`main.tsx` picks by window label). `i18n.ts` holds the English and
   Spanish strings; `tokens.css` holds the web app's color tokens.
 - `scripts/install-local.sh`: build and install for the current Linux user.
+- `src-tauri/icons/`: the app icon. `icon.svg` is the source; the PNG
+  sizes and `icon.ico` (Windows) are rendered from it:
+  `for s in 16 32 48 64 128 256; do rsvg-convert -w $s -h $s icon.svg -o ${s}x${s}.png; done`,
+  `rsvg-convert -w 512 -h 512 icon.svg -o icon.png`, and
+  `magick 16x16.png 32x32.png 48x48.png 64x64.png 256x256.png icon.ico`.
 
 The web view has only Tauri's `core:default` permissions. It never sees the
-token or the screenshot bytes (only a small preview), and makes no HTTP
+token or the screenshot bytes (only small previews; cropping sends a
+rectangle back), and makes no HTTP
 requests; it calls the commands registered in `src-tauri/src/main.rs`.
 
 Rules for changes:
