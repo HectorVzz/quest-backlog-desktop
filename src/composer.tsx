@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 
+import { CropEditor } from "./crop";
 import { errorMessage, type Strings } from "./i18n";
 import { Icon } from "./icons";
 import { native, type Game, type ScreenshotView } from "./native";
@@ -23,12 +24,17 @@ export function Composer({ t, game, active }: Props) {
   const [screenshot, setScreenshot] = useState<ScreenshotView>({ state: "none" });
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [cropping, setCropping] = useState(false);
   const textarea = useRef<HTMLTextAreaElement>(null);
   const toast = useToast();
 
   useEffect(() => {
     native.screenshot().then(setScreenshot);
-    const unlisten = native.onScreenshot(setScreenshot);
+    const unlisten = native.onScreenshot((view) => {
+      setScreenshot(view);
+      // A new or discarded screenshot ends any crop in progress.
+      if (view.state !== "ready") setCropping(false);
+    });
     return () => {
       unlisten.then((stop) => stop());
     };
@@ -38,8 +44,8 @@ export function Composer({ t, game, active }: Props) {
   useEffect(() => setWithGame(true), [game?.id]);
 
   useEffect(() => {
-    if (active) requestAnimationFrame(() => textarea.current?.focus());
-  }, [active, screenshot.state]);
+    if (active && !cropping) requestAnimationFrame(() => textarea.current?.focus());
+  }, [active, cropping, screenshot.state]);
 
   const length = [...content.trim()].length;
   const hasScreenshot = screenshot.state === "ready";
@@ -65,6 +71,10 @@ export function Composer({ t, game, active }: Props) {
       .catch((key) => setError(errorMessage(t, key)))
       .finally(() => setPosting(false));
   };
+
+  if (cropping && screenshot.state === "ready") {
+    return <CropEditor t={t} shot={screenshot} onClose={() => setCropping(false)} />;
+  }
 
   return (
     <div class="composer">
@@ -93,7 +103,7 @@ export function Composer({ t, game, active }: Props) {
         }}
       />
 
-      <ScreenshotSlot t={t} screenshot={screenshot} />
+      <ScreenshotSlot t={t} screenshot={screenshot} onCrop={() => setCropping(true)} />
 
       {error && (
         <p class="error" role="alert">
@@ -124,7 +134,13 @@ export function Composer({ t, game, active }: Props) {
   );
 }
 
-function ScreenshotSlot({ t, screenshot }: { t: Strings; screenshot: ScreenshotView }) {
+interface SlotProps {
+  t: Strings;
+  screenshot: ScreenshotView;
+  onCrop: () => void;
+}
+
+function ScreenshotSlot({ t, screenshot, onCrop }: SlotProps) {
   switch (screenshot.state) {
     case "capturing":
       return (
@@ -140,6 +156,10 @@ function ScreenshotSlot({ t, screenshot }: { t: Strings; screenshot: ScreenshotV
         <div class="screenshot">
           <img class="screenshot-preview" src={screenshot.preview} alt={t.screenshotAlt} />
           <div class="screenshot-actions">
+            <button class="button subtle small" onClick={onCrop}>
+              <Icon name="crop" size={16} />
+              {screenshot.crop ? t.editCrop : t.crop}
+            </button>
             <button class="button subtle small" onClick={() => native.takeScreenshot()}>
               <Icon name="camera" size={16} />
               {t.retakeScreenshot}

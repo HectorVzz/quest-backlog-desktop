@@ -850,6 +850,91 @@ kbd {
   color: var(--qb-color-danger);
 }
 
+/* ---------- Crop editor ---------- */
+
+.crop {
+  display: flex;
+  flex-direction: column;
+  gap: var(--qb-space-3);
+}
+
+.crop-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.crop-stage {
+  position: relative;
+  align-self: center;
+  width: min(100%, calc(240px * var(--ratio)));
+  aspect-ratio: var(--ratio);
+  overflow: hidden;
+  border-radius: var(--qb-radius-md);
+  background: var(--qb-color-raised);
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.crop-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  pointer-events: none;
+}
+
+.crop-box {
+  position: absolute;
+  cursor: move;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  /* Dims everything outside the selection. */
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.55);
+  /* Rule of thirds. */
+  background:
+    linear-gradient(to right, transparent calc(33.33% - 0.5px), rgba(255, 255, 255, 0.25) 0 calc(33.33% + 0.5px), transparent 0 calc(66.66% - 0.5px), rgba(255, 255, 255, 0.25) 0 calc(66.66% + 0.5px), transparent 0),
+    linear-gradient(to bottom, transparent calc(33.33% - 0.5px), rgba(255, 255, 255, 0.25) 0 calc(33.33% + 0.5px), transparent 0 calc(66.66% - 0.5px), rgba(255, 255, 255, 0.25) 0 calc(66.66% + 0.5px), transparent 0);
+}
+
+.crop-box[data-whole="true"] {
+  cursor: crosshair;
+  box-shadow: none;
+  background: none;
+}
+
+.crop-handle {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border: 2px solid #fff;
+  background: var(--qb-color-accent);
+  border-radius: 3px;
+}
+
+.crop-nw {
+  left: -2px;
+  top: -2px;
+  cursor: nwse-resize;
+}
+
+.crop-ne {
+  right: -2px;
+  top: -2px;
+  cursor: nesw-resize;
+}
+
+.crop-sw {
+  left: -2px;
+  bottom: -2px;
+  cursor: nesw-resize;
+}
+
+.crop-se {
+  right: -2px;
+  bottom: -2px;
+  cursor: nwse-resize;
+}
+
 /* ---------- Toasts ---------- */
 
 .toast-region {

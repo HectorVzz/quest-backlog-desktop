@@ -22,6 +22,7 @@ use base64::Engine;
 use image::codecs::jpeg::JpegEncoder;
 use image::imageops::FilterType;
 use image::DynamicImage;
+use serde::{Deserialize, Serialize};
 
 /// Longest edge sent to the API. The server resizes to 1600 anyway; this
 /// keeps uploads small and inside its 10 MB / 8000 px / 40 MP limits.
@@ -58,6 +59,50 @@ pub fn prepare(image: &DynamicImage) -> Result<Prepared, String> {
         base64::engine::general_purpose::STANDARD.encode(preview)
     );
     Ok(Prepared { upload_jpeg, preview_data_url })
+}
+
+/// Smallest crop, in pixels of the captured image, on each side.
+const CROP_MIN_EDGE: u32 = 32;
+
+/// A crop of the captured image as fractions of its width and height
+/// (0 to 1), as the webview draws it over the preview.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CropRect {
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+}
+
+/// The pixel region `(left, top, width, height)` of a `width` x `height`
+/// image that `rect` selects. `Ok(None)` when it selects the whole image.
+/// Errors are UI message keys.
+pub fn crop_region(width: u32, height: u32, rect: &CropRect) -> Result<Option<(u32, u32, u32, u32)>, &'static str> {
+    const SLACK: f64 = 1e-6;
+    let values = [rect.x, rect.y, rect.width, rect.height];
+    let valid = values.iter().all(|value| value.is_finite())
+        && rect.x >= -SLACK
+        && rect.y >= -SLACK
+        && rect.width > 0.0
+        && rect.height > 0.0
+        && rect.x + rect.width <= 1.0 + SLACK
+        && rect.y + rect.height <= 1.0 + SLACK;
+    if !valid {
+        return Err("failed");
+    }
+    let to_px = |fraction: f64, size: u32| ((fraction.clamp(0.0, 1.0) * f64::from(size)).round() as u32).min(size);
+    let (left, top) = (to_px(rect.x, width), to_px(rect.y, height));
+    let right = to_px(rect.x + rect.width, width);
+    let bottom = to_px(rect.y + rect.height, height);
+    let (crop_width, crop_height) = (right.saturating_sub(left), bottom.saturating_sub(top));
+    if crop_width < CROP_MIN_EDGE.min(width) || crop_height < CROP_MIN_EDGE.min(height) {
+        return Err("cropTooSmall");
+    }
+    if (left, top, crop_width, crop_height) == (0, 0, width, height) {
+        return Ok(None);
+    }
+    Ok(Some((left, top, crop_width, crop_height)))
 }
 
 /// Saves a full-quality PNG copy in `folder` ("Quest Backlog 2026-11-17
@@ -402,6 +447,19 @@ mod tests {
         let upload = image::load_from_memory(&prepared.upload_jpeg).unwrap();
         assert_eq!((upload.width(), upload.height()), (2560, 720));
         assert!(prepared.preview_data_url.starts_with("data:image/jpeg;base64,"));
+    }
+
+    #[test]
+    fn crop_region_maps_fractions_to_pixels() {
+        let rect = |x, y, width, height| CropRect { x, y, width, height };
+        assert_eq!(crop_region(1920, 1080, &rect(0.25, 0.5, 0.5, 0.25)), Ok(Some((480, 540, 960, 270))));
+        assert_eq!(crop_region(1920, 1080, &rect(0.0, 0.0, 1.0, 1.0)), Ok(None));
+        // Rounding noise from the webview at the edges is accepted.
+        assert_eq!(crop_region(100, 100, &rect(0.5, 0.5, 0.5000001, 0.5)), Ok(Some((50, 50, 50, 50))));
+        assert_eq!(crop_region(1920, 1080, &rect(0.0, 0.0, 0.01, 0.5)), Err("cropTooSmall"));
+        assert_eq!(crop_region(1920, 1080, &rect(0.6, 0.0, 0.6, 0.5)), Err("failed"));
+        assert_eq!(crop_region(1920, 1080, &rect(-0.1, 0.0, 0.5, 0.5)), Err("failed"));
+        assert_eq!(crop_region(1920, 1080, &rect(f64::NAN, 0.0, 0.5, 0.5)), Err("failed"));
     }
 
     #[test]

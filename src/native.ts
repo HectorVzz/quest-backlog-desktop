@@ -49,10 +49,30 @@ export interface AppInfo {
   tipsSeen: boolean;
 }
 
+/** Fractions (0 to 1) of the whole capture's width and height. */
+export interface CropRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export type ScreenshotView =
   | { state: "none" }
   | { state: "capturing" }
-  | { state: "ready"; preview: string; savedTo: string | null; saveFailed: boolean }
+  | {
+      state: "ready";
+      /** What will be posted: the crop, or the whole capture. */
+      preview: string;
+      /** The whole capture, for the crop editor. */
+      fullPreview: string;
+      /** The whole capture's size in pixels. */
+      width: number;
+      height: number;
+      crop: CropRect | null;
+      savedTo: string | null;
+      saveFailed: boolean;
+    }
   | { state: "failed" };
 
 export interface Preferences {
@@ -97,6 +117,8 @@ export const native = {
   screenshot: () => invoke<ScreenshotView>("get_screenshot"),
   takeScreenshot: (chooseWindow = false) => invoke<void>("take_screenshot", { chooseWindow }),
   discardScreenshot: () => invoke<void>("discard_screenshot"),
+  /** `null` goes back to the whole capture. */
+  cropScreenshot: (crop: CropRect | null) => invoke<void>("crop_screenshot", { crop }),
   createPost: (post: NewPost) => invoke<string>("create_post", { ...post }),
   openPost: (postId: string) => invoke<void>("open_post", { postId }),
 

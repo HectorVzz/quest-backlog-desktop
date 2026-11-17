@@ -129,6 +129,11 @@ its message is shown as it is.
   and takes the keyboard back; the panel stays on screen.
 - *Choose window…* and the tray item show KWin's crosshair: click a window,
   Escape cancels.
+- *Crop* shows the whole screenshot: drag a box over the part to post, drag
+  the box to move it or its corners to resize it, then *Apply* (Enter).
+  Only the rectangle goes back to the Rust core, which cuts it from the
+  full-size capture and encodes it again; *Whole screenshot* undoes it. The
+  local PNG copy, when on, is always the whole capture.
 - KDE Plasma uses KWin's `org.kde.KWin.ScreenShot2` (no window frame, a few
   milliseconds). The launcher entry declares it in
   `X-KDE-DBUS-Restricted-Interfaces`, like Flameshot's.
@@ -216,7 +221,8 @@ login entry (the panel then stays closed). The log line
 - `scripts/install-local.sh`: build and install for the current Linux user.
 
 The web view has only Tauri's `core:default` permissions. It never sees the
-token or the screenshot bytes (only a small preview), and makes no HTTP
+token or the screenshot bytes (only small previews; cropping sends a
+rectangle back), and makes no HTTP
 requests; it calls the commands registered in `src-tauri/src/main.rs`.
 
 Rules for changes:

@@ -132,6 +132,7 @@ fn main() {
             compose::get_screenshot,
             compose::take_screenshot,
             compose::discard_screenshot,
+            compose::crop_screenshot,
             compose::create_post,
             compose::open_post,
             preferences::open_preferences,

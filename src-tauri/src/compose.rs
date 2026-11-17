@@ -1,12 +1,14 @@
 //! Posting from the overlay: the screenshot flow and post creation.
 //!
 //! A screenshot of the game is taken from the shortcut or "Add screenshot";
-//! "Choose window…" and the tray let the user click a window instead. It is
-//! kept here as JPEG bytes, and only a preview reaches the webview. If the user turned it on in Preferences, a
-//! full-quality PNG copy is saved on this computer.
+//! "Choose window…" and the tray let the user click a window instead. The
+//! full capture and the JPEG to upload are kept here; only previews reach
+//! the webview. Cropping sends a rectangle, and the full capture is cut and
+//! encoded again here. If the user turned it on in Preferences, a
+//! full-quality PNG copy of the whole capture is saved on this computer.
 
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
@@ -15,7 +17,7 @@ use tauri_plugin_opener::OpenerExt;
 
 use crate::api::{NewPost, PostError};
 use crate::auth::{self, Auth};
-use crate::screenshot::{CaptureError, Target};
+use crate::screenshot::{CaptureError, CropRect, Target};
 use crate::{config, overlay, screenshot, settings};
 
 pub const SCREENSHOT_EVENT: &str = "screenshot://changed";
@@ -39,7 +41,14 @@ pub enum ScreenshotView {
     None,
     Capturing,
     Ready {
+        /// What will be posted: the crop, or the whole capture.
         preview: String,
+        /// The whole capture, for the crop editor.
+        full_preview: String,
+        /// The whole capture's size in pixels.
+        width: u32,
+        height: u32,
+        crop: Option<CropRect>,
         /// Where the local copy went, when saving copies is on.
         saved_to: Option<String>,
         save_failed: bool,
@@ -51,6 +60,8 @@ pub enum ScreenshotView {
 pub struct ComposeState {
     capturing: AtomicBool,
     jpeg: Mutex<Option<Vec<u8>>>,
+    /// The whole capture, kept to crop it again.
+    full: Mutex<Option<Arc<image::DynamicImage>>>,
     view: Mutex<ScreenshotView>,
 }
 
@@ -60,7 +71,11 @@ fn set_view(app: &AppHandle, view: ScreenshotView) {
 }
 
 fn clear(app: &AppHandle) {
-    *app.state::<ComposeState>().jpeg.lock().unwrap() = None;
+    let state = app.state::<ComposeState>();
+    let mut full = state.full.lock().unwrap();
+    *state.jpeg.lock().unwrap() = None;
+    *full = None;
+    drop(full);
     set_view(app, ScreenshotView::None);
 }
 
@@ -150,6 +165,8 @@ async fn capture_flow(app: &AppHandle, target: Target) {
         None
     };
     // The optional PNG copy is written alongside the upload encoding.
+    let image = Arc::new(image);
+    let full = image.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
         std::thread::scope(|scope| {
             let saving = folder.as_deref().map(|folder| scope.spawn(|| screenshot::save_copy(&image, folder)));
@@ -179,10 +196,24 @@ async fn capture_flow(app: &AppHandle, target: Target) {
                 captured_in.as_millis(),
                 started.elapsed().as_millis()
             );
-            *app.state::<ComposeState>().jpeg.lock().unwrap() = Some(prepared.upload_jpeg);
+            let (width, height) = (full.width(), full.height());
+            let state = app.state::<ComposeState>();
+            // Under the `full` lock, like crop_screenshot.
+            let mut current = state.full.lock().unwrap();
+            *state.jpeg.lock().unwrap() = Some(prepared.upload_jpeg);
+            *current = Some(full);
+            drop(current);
             set_view(
                 app,
-                ScreenshotView::Ready { preview: prepared.preview_data_url, saved_to, save_failed },
+                ScreenshotView::Ready {
+                    preview: prepared.preview_data_url.clone(),
+                    full_preview: prepared.preview_data_url,
+                    width,
+                    height,
+                    crop: None,
+                    saved_to,
+                    save_failed,
+                },
             );
         }
         Err(error) => {
@@ -222,6 +253,57 @@ pub fn take_screenshot(app: AppHandle, choose_window: bool) {
 #[tauri::command]
 pub fn discard_screenshot(app: AppHandle) {
     clear(&app);
+}
+
+/// Crops the screenshot to `crop` (fractions of the whole capture), or
+/// back to the whole capture when `None`. Always cuts from the whole
+/// capture, so a crop can be widened again.
+#[tauri::command]
+pub async fn crop_screenshot(app: AppHandle, crop: Option<CropRect>) -> Result<(), String> {
+    let full = app.state::<ComposeState>().full.lock().unwrap().clone();
+    let full = full.ok_or("screenshotMissing")?;
+    let region = match crop {
+        Some(rect) => screenshot::crop_region(full.width(), full.height(), &rect)?,
+        None => None,
+    };
+    let source = full.clone();
+    let prepared = tauri::async_runtime::spawn_blocking(move || match region {
+        Some((left, top, width, height)) => screenshot::prepare(&source.crop_imm(left, top, width, height)),
+        None => screenshot::prepare(&source),
+    })
+    .await
+    .map_err(|_| "failed".to_string())?
+    .map_err(|error| {
+        eprintln!("[screenshot] could not crop: {error}");
+        "failed".to_string()
+    })?;
+
+    let state = app.state::<ComposeState>();
+    // Held until the view is set, so a newer screenshot cannot slip in.
+    let current = state.full.lock().unwrap();
+    // A new screenshot was taken, or this one discarded, meanwhile.
+    if !current.as_ref().is_some_and(|current| Arc::ptr_eq(current, &full)) {
+        return Err("screenshotMissing".to_string());
+    }
+    let view = state.view.lock().unwrap().clone();
+    let ScreenshotView::Ready { full_preview, width, height, saved_to, save_failed, .. } = view else {
+        return Err("screenshotMissing".to_string());
+    };
+    *state.jpeg.lock().unwrap() = Some(prepared.upload_jpeg);
+    set_view(
+        &app,
+        ScreenshotView::Ready {
+            preview: prepared.preview_data_url,
+            full_preview,
+            width,
+            height,
+            crop: region.and(crop),
+            saved_to,
+            save_failed,
+        },
+    );
+    drop(current);
+    Ok(())
 }
 
 /// Posts to the feed. Returns the new post's id. Errors are UI message
