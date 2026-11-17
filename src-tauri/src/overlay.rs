@@ -27,6 +27,7 @@ pub fn show(app: &AppHandle) {
     if let Some(window) = window(app) {
         // Windows: note the game in front before the overlay takes focus.
         crate::detect::capture_foreground();
+        eprintln!("[overlay] show (visible before: {})", window.is_visible().unwrap_or(false));
         SHOWN.fetch_add(1, Ordering::SeqCst);
         let _ = window.show();
         let _ = window.set_focus();
@@ -41,6 +42,7 @@ pub fn hide(app: &AppHandle) {
         return;
     }
     let shown = SHOWN.load(Ordering::SeqCst);
+    eprintln!("[overlay] hide");
     let _ = window.emit(HIDING_EVENT, ());
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(CLOSE_ANIMATION).await;
