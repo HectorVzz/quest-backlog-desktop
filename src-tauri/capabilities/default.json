@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "The overlay webview only gets the core event API; all HTTP, the token, hotkeys and URL opening stay in Rust.",
+  "windows": ["overlay", "preferences"],
+  "permissions": ["core:default"]
+}

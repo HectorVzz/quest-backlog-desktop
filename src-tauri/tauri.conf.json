@@ -1,0 +1,37 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Quest Backlog",
+  "mainBinaryName": "quest-backlog-desktop",
+  "version": "0.1.0",
+  "identifier": "com.questbacklog.QuestBacklog",
+  "build": {
+    "beforeDevCommand": "pnpm vite",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "pnpm vite build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "overlay",
+        "title": "Quest Backlog",
+        "width": 560,
+        "height": 600,
+        "visible": false,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "resizable": false,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://images.igdb.com; connect-src ipc: http://ipc.localhost"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis", "appimage", "deb"],
+    "icon": ["icons/icon.png"]
+  }
+}

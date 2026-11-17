@@ -1,0 +1,54 @@
+[package]
+name = "quest-backlog-desktop"
+version = "0.1.0"
+description = "Quest Backlog companion app for Windows and Linux"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/HectorVzz/quest-backlog-desktop"
+edition = "2021"
+publish = false
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-single-instance = "2"
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+reqwest = { version = "0.12", default-features = false, features = ["json", "multipart", "rustls-tls"] }
+tokio = { version = "1", features = ["macros", "sync", "time"] }
+sys-locale = "0.3"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+base64 = "0.22"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+tauri-plugin-dialog = "2"
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-autostart = "2"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+# Linux uses ksni instead: libayatana's tray does not report left clicks.
+tauri = { version = "2", features = ["tray-icon"] }
+keyring = { version = "3", features = ["windows-native"] }
+windows-sys = { version = "0.59", features = [
+  "Win32_Foundation",
+  "Win32_Graphics_Gdi",
+  "Win32_System_Registry",
+  "Win32_System_Threading",
+  "Win32_UI_WindowsAndMessaging",
+] }
+xcap = "0.9"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { version = "3", features = ["sync-secret-service", "crypto-rust"] }
+gtk = "0.18"
+gtk-layer-shell = { version = "0.8", features = ["v0_6"] }
+ashpd = { version = "0.14", default-features = false, features = ["tokio", "global_shortcuts", "screenshot"] }
+futures-util = "0.3"
+ksni = "0.3"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true

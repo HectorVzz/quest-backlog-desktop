@@ -1,0 +1,61 @@
+/*
+ * The Quest Backlog web app's semantic color and radius tokens (only
+ * the ones this app uses). Keep the values in sync with the web app by hand.
+ */
+
+:root {
+  --qb-radius-sm: 6px;
+  --qb-radius-md: 8px;
+  --qb-radius-lg: 10px;
+
+  --qb-space-1: 4px;
+  --qb-space-2: 8px;
+  --qb-space-3: 12px;
+  --qb-space-4: 16px;
+  --qb-space-5: 24px;
+  --qb-space-6: 32px;
+
+  --qb-motion-fast: 120ms ease-out;
+
+  color-scheme: dark;
+  --qb-color-page: #121315;
+  --qb-color-raised: #1a1c1f;
+  --qb-color-overlay: #23262a;
+  --qb-color-border: #2a2d32;
+  --qb-color-border-strong: #3a3e45;
+  --qb-color-text: #ecedee;
+  --qb-color-text-secondary: #a6abb3;
+  --qb-color-text-muted: #858b95;
+
+  --qb-color-accent: #e9a23b;
+  --qb-color-accent-hover: #f0b257;
+  --qb-color-accent-subtle: rgba(233, 162, 59, 0.14);
+  --qb-color-on-accent: #1a1205;
+  --qb-color-accent-text: #e9a23b;
+  --qb-color-danger: #e5534b;
+  --qb-color-danger-subtle: rgba(229, 83, 75, 0.14);
+  --qb-color-focus: rgba(233, 162, 59, 0.5);
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    color-scheme: light;
+    --qb-color-page: #f6f5f2;
+    --qb-color-raised: #ffffff;
+    --qb-color-overlay: #ffffff;
+    --qb-color-border: #e3e1dc;
+    --qb-color-border-strong: #c9c6bf;
+    --qb-color-text: #1b1c1e;
+    --qb-color-text-secondary: #5b6068;
+    --qb-color-text-muted: #676c74;
+
+    --qb-color-accent: #e09a2b;
+    --qb-color-accent-hover: #d08a1c;
+    --qb-color-accent-subtle: rgba(224, 154, 43, 0.16);
+    --qb-color-on-accent: #1a1205;
+    --qb-color-accent-text: #8f5706;
+    --qb-color-danger: #c62f28;
+    --qb-color-danger-subtle: rgba(198, 47, 40, 0.1);
+    --qb-color-focus: rgba(143, 87, 6, 0.45);
+  }
+}

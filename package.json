@@ -1,0 +1,25 @@
+{
+  "name": "quest-backlog-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "license": "GPL-3.0-or-later",
+  "type": "module",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "vite": "vite",
+    "typecheck": "tsc --noEmit",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@fontsource-variable/hanken-grotesk": "^5.3.0",
+    "@tauri-apps/api": "^2.12.5",
+    "preact": "^10.29.8"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "^2.10.6",
+    "@tauri-apps/cli": "^2.12.5",
+    "typescript": "^5.9.3",
+    "vite": "^6.4.6"
+  }
+}
