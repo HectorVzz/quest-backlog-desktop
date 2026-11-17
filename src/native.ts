@@ -146,9 +146,6 @@ export const native = {
     listen<AuthView>("auth://changed", (event) => handler(event.payload)),
   onShown: (handler: () => void): Promise<UnlistenFn> =>
     listen("overlay://shown", () => handler()),
-  /** The panel is about to hide: play the closing animation. */
-  onHiding: (handler: () => void): Promise<UnlistenFn> =>
-    listen("overlay://hiding", () => handler()),
   onSettingsChanged: (handler: () => void): Promise<UnlistenFn> =>
     listen("settings://changed", () => handler()),
   onCompose: (handler: () => void): Promise<UnlistenFn> =>
