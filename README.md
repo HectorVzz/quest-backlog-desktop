@@ -3,8 +3,8 @@
 A small companion app for [Quest Backlog](https://quest-backlog.com) on
 Windows and Linux. It lives in the system tray, like Flameshot. Press a
 shortcut while playing and a quick panel opens over the game. From it you
-can update the game's status or post to Quest Backlog, with a screenshot of
-the game if you want one.
+can update the game's status and hours played, share the update to your
+feed, or post to Quest Backlog with a screenshot of the game.
 
 Status: in development, no releases yet. Tested on Linux (KDE Plasma,
 Wayland); the Windows build is not tested yet.
@@ -37,7 +37,8 @@ The app connects to two places only:
 
 - `quest-backlog.com`, the Quest Backlog API, and only when you do
   something: sign in, open the panel (to look up the detected game and your
-  status for it), search for a game, save a status or post.
+  status and hours for it), search for a game, save a status or hours, or
+  post.
 - `images.igdb.com`, to show game covers.
 
 What the server receives:
@@ -46,7 +47,8 @@ What the server receives:
   see them when you approve the sign-in and later under Connected devices on
   the website, where you can sign the app out.
 - A detected Steam game's app id, to look the game up.
-- What you choose to save or post: a status, text, a screenshot.
+- What you choose to save or post: a status, hours played, text, a
+  screenshot.
 
 The executables you matched to games (`games.json`) stay on your computer.
 
@@ -60,6 +62,14 @@ The executables you matched to games (`games.json`) stay on your computer.
   number keys 1 to 6 pick Playing, Completed, Platinum'd, Backlog, Dropped,
   Wishlist) and *Post* (text, game, screenshot, spoiler; Ctrl+Enter posts).
   The first time you open it, it lists these keys until you press *Got it*.
+- **Hours played:** under the status buttons; saved on Enter or when you
+  leave the field (empty keeps the saved hours). Games synced from Steam
+  show Steam's hours read-only, because typing hours there would unlink
+  them from Steam on Quest Backlog.
+- **Post update:** shares the game's current status to your feed, like
+  "Post update" on the website, with an editable sentence and your hours.
+  The "Saved as …" message offers it right after you change a status.
+  Nothing is shared unless you press *Post*.
 - **Preferences:** a normal window. Shortcuts, keeping a copy of screenshots
   and where, language (English or Spanish), start with the system.
 - **Shortcuts:** `Ctrl+Shift+G` opens the quick panel; `Ctrl+Shift+F12`

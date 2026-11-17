@@ -1,6 +1,8 @@
 // Interface strings. Every change goes into both languages.
 
 const en = {
+  /** For number formatting. */
+  locale: "en",
   close: "Close",
   connecting: "Connecting…",
   signInTitle: "Sign in to Quest Backlog",
@@ -29,6 +31,22 @@ const en = {
   detectAgain: "Detect again",
   backToGame: "Back",
   notTracked: "Not in your backlog yet",
+  hoursPlayed: "Hours played",
+  hours: (hours: string) => `${hours} h`,
+  hoursSaved: (hours: string) => `${hours} h logged`,
+  hoursFromSteam: "From Steam",
+  hoursNeedStatus: "Choose a status first",
+  shareStatus: "Post update",
+  shareTitle: (status: string) => `Post "${status}" to your feed`,
+  shareDefaults: {
+    playing: "Started this run and wanted to log the momentum.",
+    completed: "Wrapped this one up and logged the finish.",
+    platinumed: "Closed this one out and earned the platinum.",
+    backlog: "Added this one to the backlog for a future slot.",
+    dropped: "Stepping away from this one for now.",
+    wishlist: "Added this one to the wishlist to keep it on the radar.",
+  },
+  shared: "Update posted",
   savedAs: (status: string) => `Saved as ${status}`,
   statuses: {
     playing: "Playing",
@@ -106,6 +124,8 @@ const en = {
     postTooLong: "Posts can have at most 500 characters.",
     screenshotMissing: "The screenshot is no longer available. Take it again.",
     cropTooSmall: "That area is too small. Select a larger part of the screenshot.",
+    hoursInvalid: "Enter hours between 0 and 100,000.",
+    shareEmpty: "Write something to post with the update.",
     hotkeyInvalid: "That shortcut isn't supported. Try another key.",
     hotkeyNeedsModifier: "Use Ctrl, Alt, Shift or Super with the key (F-keys work alone).",
     hotkeySame: "The two shortcuts must be different.",
@@ -129,6 +149,7 @@ export function errorMessage(t: Strings, key: unknown): string {
 }
 
 const es: Strings = {
+  locale: "es",
   close: "Cerrar",
   connecting: "Conectando…",
   signInTitle: "Inicia sesión en Quest Backlog",
@@ -157,6 +178,22 @@ const es: Strings = {
   detectAgain: "Detectar de nuevo",
   backToGame: "Volver",
   notTracked: "Aún no está en tu backlog",
+  hoursPlayed: "Horas jugadas",
+  hours: (hours: string) => `${hours} h`,
+  hoursSaved: (hours: string) => `${hours} h registradas`,
+  hoursFromSteam: "Desde Steam",
+  hoursNeedStatus: "Elige un estado primero",
+  shareStatus: "Publicar actualización",
+  shareTitle: (status: string) => `Publicar «${status}» en tu feed`,
+  shareDefaults: {
+    playing: "Empecé esta partida y quise registrar el impulso.",
+    completed: "Terminé este juego y quise registrar el cierre.",
+    platinumed: "Terminé este juego y además saqué el platino.",
+    backlog: "Añadí este juego al backlog para jugarlo después.",
+    dropped: "Voy a dejar este juego por ahora.",
+    wishlist: "Añadí este juego a la wishlist para tenerlo en el radar.",
+  },
+  shared: "Actualización publicada",
   savedAs: (status: string) => `Guardado como ${status}`,
   statuses: {
     playing: "Jugando",
@@ -234,6 +271,8 @@ const es: Strings = {
     postTooLong: "Las publicaciones pueden tener como máximo 500 caracteres.",
     screenshotMissing: "La captura ya no está disponible. Tómala de nuevo.",
     cropTooSmall: "Esa zona es demasiado pequeña. Elige una parte más grande de la captura.",
+    hoursInvalid: "Escribe un número de horas entre 0 y 100.000.",
+    shareEmpty: "Escribe algo para publicar con la actualización.",
     hotkeyInvalid: "Ese atajo no es compatible. Prueba con otra tecla.",
     hotkeyNeedsModifier: "Usa Ctrl, Alt, Mayús o Super con la tecla (las teclas F funcionan solas).",
     hotkeySame: "Los dos atajos deben ser distintos.",

@@ -14,8 +14,17 @@ export interface Game {
   releaseDate: string | null;
 }
 
+/** The viewer's entry for a game. */
+export interface Progress {
+  /** `null` when the game is not in the viewer's backlog. */
+  status: StatusKey | null;
+  hoursPlayed: number | null;
+  /** Steam keeps the hours; show them read-only. */
+  steamHours: boolean;
+}
+
 export type Detection =
-  | { kind: "game"; game: Game; status: StatusKey | null; executable: string | null }
+  | { kind: "game"; game: Game; progress: Progress; executable: string | null }
   | { kind: "unknown"; executable: string; query: string }
   | { kind: "nothing" };
 
@@ -109,10 +118,13 @@ export const native = {
 
   detectGame: () => invoke<Detection>("detect_game"),
   searchGames: (query: string) => invoke<Game[]>("search_games", { query }),
-  chooseGame: (game: Game) =>
-    invoke<{ game: Game; status: StatusKey | null }>("choose_game", { game }),
-  setGameStatus: (gameId: string, status: StatusKey) =>
-    invoke<StatusKey>("set_game_status", { gameId, status }),
+  chooseGame: (game: Game) => invoke<{ game: Game; progress: Progress }>("choose_game", { game }),
+  /** `hoursPlayed` undefined keeps the saved hours. */
+  setGameStatus: (gameId: string, status: StatusKey, hoursPlayed?: number) =>
+    invoke<Progress>("set_game_status", { gameId, status, hoursPlayed: hoursPlayed ?? null }),
+  /** Posts a status update to the feed; returns the post id. */
+  shareStatus: (gameId: string, status: StatusKey, note: string, hoursPlayed: number | null) =>
+    invoke<string>("share_status", { gameId, status, note, hoursPlayed }),
 
   screenshot: () => invoke<ScreenshotView>("get_screenshot"),
   takeScreenshot: (chooseWindow = false) => invoke<void>("take_screenshot", { chooseWindow }),

@@ -32,7 +32,7 @@ const OVERLAY_SETTLE: Duration = Duration::from_millis(120);
 const FOCUS_SETTLE: Duration = Duration::from_millis(60);
 
 /// The post length limit of the Quest Backlog API.
-const POST_MAX_CHARS: usize = 500;
+pub const POST_MAX_CHARS: usize = 500;
 
 #[derive(Debug, Clone, Default, Serialize)]
 #[serde(tag = "state", rename_all = "camelCase", rename_all_fields = "camelCase")]
@@ -332,7 +332,7 @@ pub async fn create_post(
     }
     let game_id = game_id.as_deref().map(str::trim).filter(|id| !id.is_empty());
 
-    let post = NewPost { content, game_id, spoiler, image };
+    let post = NewPost { content, game_id, spoiler, image, status: None, hours_played: None };
     match app.state::<Auth>().api().create_post(&token, post).await {
         Ok(created) => {
             if with_screenshot {

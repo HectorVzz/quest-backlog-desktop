@@ -145,6 +145,7 @@ fn main() {
             games::search_games,
             games::choose_game,
             games::set_game_status,
+            games::share_status,
             get_app_info,
             dismiss_tips,
             get_auth,
