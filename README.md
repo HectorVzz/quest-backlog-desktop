@@ -55,9 +55,11 @@ The executables you matched to games (`games.json`) stay on your computer.
 - **Tray icon:** left click opens or closes the quick panel; right click
   shows *Open quick panel*, *Screenshot a window and post…*,
   *Preferences…*, *Quit*. The app never sits in the taskbar.
-- **Quick panel:** always on top, Escape closes it. Two tabs: *Status*
-  (detected game, one-click status) and *Post* (text, game, screenshot,
-  spoiler).
+- **Quick panel:** always on top, Escape closes it. The detected game's
+  cover and title sit at the top. Two tabs: *Status* (one-click status; the
+  number keys 1 to 6 pick Playing, Completed, Platinum'd, Backlog, Dropped,
+  Wishlist) and *Post* (text, game, screenshot, spoiler; Ctrl+Enter posts).
+  The first time you open it, it lists these keys until you press *Got it*.
 - **Preferences:** a normal window. Shortcuts, keeping a copy of screenshots
   and where, language (English or Spanish), start with the system.
 - **Shortcuts:** `Ctrl+Shift+G` opens the quick panel; `Ctrl+Shift+F12`
@@ -147,12 +149,14 @@ them from Preferences:
   "screenshotHotkey": "Ctrl+Shift+F12",
   "saveScreenshots": false,
   "screenshotFolder": null,
-  "language": null
+  "language": null,
+  "tipsSeen": false
 }
 ```
 
 `screenshotFolder: null` means `<Pictures>/Quest Backlog`. `language` is
-`"en"`, `"es"` or `null` (the system language).
+`"en"`, `"es"` or `null` (the system language). `tipsSeen` turns into
+`true` when you dismiss the quick panel's shortcut list.
 
 ## Building
 

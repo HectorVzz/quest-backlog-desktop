@@ -3,10 +3,21 @@
 //! (verified on KDE Plasma), which is what keeps it
 //! above borderless-fullscreen games. Exclusive fullscreen is not supported.
 
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Duration;
+
 use tauri::{AppHandle, Emitter, Manager, WebviewWindow, WindowEvent};
 
 pub const LABEL: &str = "overlay";
 pub const SHOWN_EVENT: &str = "overlay://shown";
+/// The panel plays its closing animation; the window hides after `CLOSE_ANIMATION`.
+pub const HIDING_EVENT: &str = "overlay://hiding";
+/// Matches the closing animation in src/app.css.
+const CLOSE_ANIMATION: Duration = Duration::from_millis(140);
+
+/// Bumped on every show, so a delayed hide started before a show does not
+/// hide the panel the user just opened again.
+static SHOWN: AtomicU64 = AtomicU64::new(0);
 
 fn window(app: &AppHandle) -> Option<WebviewWindow> {
     app.get_webview_window(LABEL)
@@ -16,13 +27,31 @@ pub fn show(app: &AppHandle) {
     if let Some(window) = window(app) {
         // Windows: note the game in front before the overlay takes focus.
         crate::detect::capture_foreground();
+        SHOWN.fetch_add(1, Ordering::SeqCst);
         let _ = window.show();
         let _ = window.set_focus();
         let _ = window.emit(SHOWN_EVENT, ());
     }
 }
 
+/// Hides the panel after its closing animation.
 pub fn hide(app: &AppHandle) {
+    let Some(window) = window(app) else { return };
+    if !window.is_visible().unwrap_or(false) {
+        return;
+    }
+    let shown = SHOWN.load(Ordering::SeqCst);
+    let _ = window.emit(HIDING_EVENT, ());
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(CLOSE_ANIMATION).await;
+        if SHOWN.load(Ordering::SeqCst) == shown {
+            let _ = window.hide();
+        }
+    });
+}
+
+/// Hides the panel at once, for a screenshot of the game behind it.
+pub fn hide_now(app: &AppHandle) {
     if let Some(window) = window(app) {
         let _ = window.hide();
     }

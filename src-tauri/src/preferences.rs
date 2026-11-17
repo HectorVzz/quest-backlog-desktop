@@ -124,6 +124,7 @@ pub fn update_preferences(app: AppHandle, input: PreferencesInput) -> Result<Pre
         save_screenshots: input.save_screenshots,
         screenshot_folder: folder,
         language: input.language.filter(|language| language == "en" || language == "es"),
+        tips_seen: previous.tips_seen,
     };
 
     let hotkeys_changed =

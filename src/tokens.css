@@ -1,6 +1,7 @@
 /*
  * The Quest Backlog web app's semantic color and radius tokens (only
  * the ones this app uses). Keep the values in sync with the web app by hand.
+ * Status colors are used only for game statuses.
  */
 
 :root {
@@ -16,6 +17,8 @@
   --qb-space-6: 32px;
 
   --qb-motion-fast: 120ms ease-out;
+  --qb-ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --qb-shadow-overlay: 0 18px 48px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.3);
 
   color-scheme: dark;
   --qb-color-page: #121315;
@@ -35,6 +38,13 @@
   --qb-color-danger: #e5534b;
   --qb-color-danger-subtle: rgba(229, 83, 75, 0.14);
   --qb-color-focus: rgba(233, 162, 59, 0.5);
+
+  --qb-status-playing: #4caf7a;
+  --qb-status-completed: #5b9be6;
+  --qb-status-platinumed: #c9d1dc;
+  --qb-status-backlog: #8a9099;
+  --qb-status-dropped: #e0736b;
+  --qb-status-wishlist: #a78bda;
 }
 
 @media (prefers-color-scheme: light) {
@@ -57,5 +67,13 @@
     --qb-color-danger: #c62f28;
     --qb-color-danger-subtle: rgba(198, 47, 40, 0.1);
     --qb-color-focus: rgba(143, 87, 6, 0.45);
+    --qb-shadow-overlay: 0 18px 48px rgba(27, 28, 30, 0.18), 0 2px 8px rgba(27, 28, 30, 0.1);
+
+    --qb-status-playing: #2e8a57;
+    --qb-status-completed: #2f6fbf;
+    --qb-status-platinumed: #6b7480;
+    --qb-status-backlog: #6b717a;
+    --qb-status-dropped: #c24f46;
+    --qb-status-wishlist: #7a5cb8;
   }
 }

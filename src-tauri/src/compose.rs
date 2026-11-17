@@ -196,7 +196,7 @@ async fn capture_with_overlay_hidden(
     app: &AppHandle,
     target: Target,
 ) -> Result<image::DynamicImage, CaptureError> {
-    overlay::hide(app);
+    overlay::hide_now(app);
     // Let the compositor unmap the overlay and give focus back to the game.
     // KWin does it in under 50 ms.
     tokio::time::sleep(OVERLAY_SETTLE).await;

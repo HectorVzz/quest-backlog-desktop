@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 
 import { errorMessage, type Strings } from "./i18n";
+import { Icon } from "./icons";
 import { native, type Game, type ScreenshotView } from "./native";
+import { useToast } from "./toast";
 
 // Mirrors POST_MAX_CHARS in src-tauri/src/compose.rs and the API limit.
 const MAX_CHARS = 500;
@@ -21,15 +23,12 @@ export function Composer({ t, game, active }: Props) {
   const [screenshot, setScreenshot] = useState<ScreenshotView>({ state: "none" });
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [postedId, setPostedId] = useState<string | null>(null);
   const textarea = useRef<HTMLTextAreaElement>(null);
+  const toast = useToast();
 
   useEffect(() => {
     native.screenshot().then(setScreenshot);
-    const unlisten = native.onScreenshot((view) => {
-      setScreenshot(view);
-      if (view.state === "ready") setPostedId(null);
-    });
+    const unlisten = native.onScreenshot(setScreenshot);
     return () => {
       unlisten.then((stop) => stop());
     };
@@ -39,8 +38,8 @@ export function Composer({ t, game, active }: Props) {
   useEffect(() => setWithGame(true), [game?.id]);
 
   useEffect(() => {
-    if (active && !postedId) requestAnimationFrame(() => textarea.current?.focus());
-  }, [active, postedId, screenshot.state]);
+    if (active) requestAnimationFrame(() => textarea.current?.focus());
+  }, [active, screenshot.state]);
 
   const length = [...content.trim()].length;
   const hasScreenshot = screenshot.state === "ready";
@@ -59,29 +58,13 @@ export function Composer({ t, game, active }: Props) {
         withScreenshot: hasScreenshot,
       })
       .then((id) => {
-        setPostedId(id);
         setContent("");
         setSpoiler(false);
+        toast({ text: t.posted, action: { label: t.viewPost, run: () => native.openPost(id) } });
       })
       .catch((key) => setError(errorMessage(t, key)))
       .finally(() => setPosting(false));
   };
-
-  if (postedId) {
-    return (
-      <div class="composer">
-        <h1>{t.posted}</h1>
-        <div class="actions">
-          <button data-primary class="button primary" onClick={() => native.openPost(postedId)}>
-            {t.viewPost}
-          </button>
-          <button class="button subtle" onClick={() => setPostedId(null)}>
-            {t.newPost}
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div class="composer">
@@ -89,7 +72,7 @@ export function Composer({ t, game, active }: Props) {
         <div class="game-chip">
           <span>{attachedGame.title}</span>
           <button class="chip-remove" aria-label={t.removeGame} title={t.removeGame} onClick={() => setWithGame(false)}>
-            ×
+            <Icon name="close" size={12} />
           </button>
         </div>
       )}
@@ -126,7 +109,14 @@ export function Composer({ t, game, active }: Props) {
         <span class={`counter ${length > MAX_CHARS ? "counter-over" : ""}`}>
           {length}/{MAX_CHARS}
         </span>
-        <button data-primary class="button primary" disabled={!canPost} onClick={submit}>
+        <button
+          data-primary
+          class="button primary"
+          disabled={!canPost}
+          onClick={submit}
+          aria-keyshortcuts="Control+Enter"
+          title="Ctrl+Enter"
+        >
           {posting ? t.posting : t.post}
         </button>
       </div>
@@ -137,38 +127,49 @@ export function Composer({ t, game, active }: Props) {
 function ScreenshotSlot({ t, screenshot }: { t: Strings; screenshot: ScreenshotView }) {
   switch (screenshot.state) {
     case "capturing":
-      return <p class="muted small">{t.capturing}</p>;
+      return (
+        <div class="screenshot">
+          <div class="screenshot-placeholder" aria-busy="true">
+            <span class="muted small">{t.capturing}</span>
+          </div>
+        </div>
+      );
 
     case "ready":
       return (
         <div class="screenshot">
           <img class="screenshot-preview" src={screenshot.preview} alt={t.screenshotAlt} />
-          <div class="actions">
+          <div class="screenshot-actions">
             <button class="button subtle small" onClick={() => native.takeScreenshot()}>
+              <Icon name="camera" size={16} />
               {t.retakeScreenshot}
             </button>
             <button class="button subtle small" onClick={() => native.takeScreenshot(true)}>
+              <Icon name="window" size={16} />
               {t.chooseWindow}
             </button>
             <button class="button subtle small" onClick={() => native.discardScreenshot()}>
+              <Icon name="trash" size={16} />
               {t.removeScreenshot}
             </button>
+            {screenshot.savedTo && <p class="muted small saved-copy">{t.savedCopy(screenshot.savedTo)}</p>}
+            {screenshot.saveFailed && <p class="error small">{t.saveCopyFailed}</p>}
           </div>
-          {screenshot.savedTo && <p class="muted small">{t.savedCopy(screenshot.savedTo)}</p>}
-          {screenshot.saveFailed && <p class="error">{t.saveCopyFailed}</p>}
         </div>
       );
 
     case "failed":
     case "none":
       return (
-        <div>
+        <div class="screenshot-empty">
           {screenshot.state === "failed" && <p class="error">{t.screenshotFailed}</p>}
           <div class="actions">
             <button class="button default small" onClick={() => native.takeScreenshot()}>
+              <Icon name="camera" size={16} />
               {t.addScreenshot}
             </button>
             <button class="button subtle small" onClick={() => native.takeScreenshot(true)}>
+              <Icon name="window" size={16} />
               {t.chooseWindow}
             </button>
           </div>

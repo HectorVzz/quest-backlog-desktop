@@ -45,6 +45,8 @@ export interface AppInfo {
   version: string;
   language: "en" | "es";
   hotkey: HotkeyStatus;
+  /** The first-run shortcut tips were dismissed. */
+  tipsSeen: boolean;
 }
 
 export type ScreenshotView =
@@ -76,6 +78,7 @@ export interface NewPost {
 // `server:<message>`; show them with `errorMessage`.
 export const native = {
   appInfo: () => invoke<AppInfo>("get_app_info"),
+  dismissTips: () => invoke<void>("dismiss_tips"),
   auth: () => invoke<AuthView>("get_auth"),
   startSignIn: () => invoke<void>("start_sign_in"),
   cancelSignIn: () => invoke<void>("cancel_sign_in"),
@@ -109,6 +112,9 @@ export const native = {
     listen<AuthView>("auth://changed", (event) => handler(event.payload)),
   onShown: (handler: () => void): Promise<UnlistenFn> =>
     listen("overlay://shown", () => handler()),
+  /** The panel is about to hide: play the closing animation. */
+  onHiding: (handler: () => void): Promise<UnlistenFn> =>
+    listen("overlay://hiding", () => handler()),
   onSettingsChanged: (handler: () => void): Promise<UnlistenFn> =>
     listen("settings://changed", () => handler()),
   onCompose: (handler: () => void): Promise<UnlistenFn> =>
