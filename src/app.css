@@ -12,8 +12,7 @@ body,
 }
 
 body {
-  /* The quick panel's window is transparent around the panel. */
-  background: transparent;
+  background: var(--qb-color-page);
   color: var(--qb-color-text);
   font: 14px/1.5 "Hanken Grotesk Variable", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -66,37 +65,39 @@ h2 {
 
 /* ---------- The panel ---------- */
 
+/*
+ * The window is opaque, as it was when the layer-shell overlay was tested
+ * on KDE Plasma (Wayland); a transparent one is unproven there. So the
+ * panel fills it, and opening and closing animate its contents.
+ */
 .panel {
   position: absolute;
-  inset: 10px;
+  inset: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   border: 1px solid var(--qb-color-border);
-  border-radius: 12px;
   background: var(--qb-color-page);
-  box-shadow: var(--qb-shadow-overlay);
   /* The backdrop (z-index -1) stays above the panel's background. */
   isolation: isolate;
-  transform-origin: 50% 30%;
-  animation: panel-in 180ms var(--qb-ease-out) both;
 }
 
-.panel[data-motion="closing"] {
-  animation: panel-out 140ms ease-in both;
+/* Opacity only: a transform here would move the backdrop with it. */
+.panel > * {
+  animation: fade-in 180ms var(--qb-ease-out) both;
 }
 
-@keyframes panel-in {
-  from {
-    opacity: 0;
-    transform: translateY(10px) scale(0.98);
-  }
+.panel[data-motion="closing"] > * {
+  animation: fade-out 140ms ease-in both;
 }
 
-@keyframes panel-out {
+.panel[data-motion="open"] .tabs {
+  animation: rise 240ms var(--qb-ease-out) 40ms both;
+}
+
+@keyframes fade-out {
   to {
     opacity: 0;
-    transform: translateY(6px) scale(0.985);
   }
 }
 
@@ -643,8 +644,8 @@ h2 {
 .tips {
   display: flex;
   flex-direction: column;
-  gap: var(--qb-space-2);
-  padding: var(--qb-space-3) var(--qb-space-4);
+  gap: 6px;
+  padding: 10px var(--qb-space-4);
   border-radius: var(--qb-radius-lg);
   background: var(--qb-color-raised);
   animation: rise 220ms var(--qb-ease-out) both;
@@ -663,7 +664,7 @@ h2 {
 .tips-list {
   display: grid;
   grid-template-columns: auto 1fr;
-  gap: 4px var(--qb-space-3);
+  gap: 3px var(--qb-space-3);
   margin: 0;
 }
 
@@ -687,7 +688,7 @@ kbd {
   font: inherit;
   font-size: 12px;
   font-weight: 600;
-  line-height: 20px;
+  line-height: 18px;
   padding: 0 6px;
   border-radius: 5px;
   border: 1px solid var(--qb-color-border-strong);

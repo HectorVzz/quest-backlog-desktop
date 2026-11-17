@@ -104,7 +104,6 @@ const en = {
   tipStatusKeys: "Set the game's status",
   tipToggle: "Open or close this panel from any game",
   tipScreenshot: "Screenshot the game and post it",
-  tipPost: "Post",
   tipClose: "Close the panel",
   gotIt: "Got it",
   shortcutFailed:
@@ -251,7 +250,6 @@ const es: Strings = {
   tipStatusKeys: "Cambia el estado del juego",
   tipToggle: "Abre o cierra este panel desde cualquier juego",
   tipScreenshot: "Captura el juego y publícalo",
-  tipPost: "Publicar",
   tipClose: "Cierra el panel",
   gotIt: "Entendido",
   shortcutFailed:

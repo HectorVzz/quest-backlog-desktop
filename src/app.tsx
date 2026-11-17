@@ -213,7 +213,6 @@ function Tips({ t, info, onDismiss }: { t: Strings; info: AppInfo; onDismiss: ()
     ["1–6", t.tipStatusKeys],
     ...(info.hotkey.toggle ? [[info.hotkey.toggle, t.tipToggle] as [string, string]] : []),
     ...(info.hotkey.screenshot ? [[info.hotkey.screenshot, t.tipScreenshot] as [string, string]] : []),
-    ["Ctrl+Enter", t.tipPost],
     ["Esc", t.tipClose],
   ];
   return (
