@@ -99,12 +99,29 @@ pub async fn detect_game(app: AppHandle) -> Result<Detection, String> {
     let first = running.executables.first().cloned();
     *app.state::<GamesState>().0.lock().unwrap() = first.clone();
 
-    // 1. An executable the user already matched on this computer.
+    // 1. An executable the user already matched on this computer, with the
+    //    game's current record from the server.
     for executable in &running.executables {
-        if let Some(game) = known_games::remembered(&app, &executable.key()) {
-            *app.state::<GamesState>().0.lock().unwrap() = Some(executable.clone());
-            return found(&app, &token, game, Some(executable)).await;
+        let key = executable.key();
+        let Some(stored) = known_games::remembered(&app, &key) else { continue };
+        let game = match auth.api().game_by_slug(&token, &stored.slug).await {
+            Ok(Some(game)) => game,
+            Ok(None) => {
+                eprintln!("[games] {} is no longer on the server; asking again", stored.slug);
+                if let Err(error) = known_games::forget(&app, &key) {
+                    eprintln!("[games] could not forget {}: {error}", executable.name);
+                }
+                continue;
+            }
+            Err(error) => return Err(fail(&app, error).await),
+        };
+        if game != stored {
+            if let Err(error) = known_games::remember(&app, &key, game.clone()) {
+                eprintln!("[games] could not update {}: {error}", executable.name);
+            }
         }
+        *app.state::<GamesState>().0.lock().unwrap() = Some(executable.clone());
+        return found(&app, &token, game, Some(executable)).await;
     }
 
     // 2. A Steam game.

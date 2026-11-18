@@ -1,7 +1,10 @@
 //! Which executable is which game.
 //!
 //! - Remembered: the user's own choices, stored on this computer only in
-//!   `games.json` next to `settings.json`. Never sent to the server.
+//!   `games.json` next to `settings.json`. The executable names are never
+//!   sent to the server. The stored game is looked up again by its slug each
+//!   time, since its id is the server's (it differs between servers, and a
+//!   game can be re-imported).
 //! - Built in: common non-Steam games. Only used to pre-fill the search;
 //!   the user always confirms the match once, and that is remembered.
 
@@ -81,13 +84,26 @@ pub fn remembered(app: &AppHandle, key: &str) -> Option<Game> {
 }
 
 pub fn remember(app: &AppHandle, key: &str, game: Game) -> Result<(), String> {
-    let path = path(app).ok_or("no config directory")?;
     let mut remembered = read(app);
     remembered.games.insert(key.to_string(), game);
+    write(app, &remembered)
+}
+
+/// Drops a choice whose game the server no longer has.
+pub fn forget(app: &AppHandle, key: &str) -> Result<(), String> {
+    let mut remembered = read(app);
+    if remembered.games.remove(key).is_none() {
+        return Ok(());
+    }
+    write(app, &remembered)
+}
+
+fn write(app: &AppHandle, remembered: &Remembered) -> Result<(), String> {
+    let path = path(app).ok_or("no config directory")?;
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir).map_err(|error| error.to_string())?;
     }
-    let text = serde_json::to_string_pretty(&remembered).map_err(|error| error.to_string())?;
+    let text = serde_json::to_string_pretty(remembered).map_err(|error| error.to_string())?;
     std::fs::write(&path, text).map_err(|error| error.to_string())
 }
 
