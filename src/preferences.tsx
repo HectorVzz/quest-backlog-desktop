@@ -161,6 +161,7 @@ function PreferencesForm({ t }: { t: Strings }) {
           />
           {t.startWithSystem}
         </label>
+        <p class="muted small">{t.startWithSystemHint}</p>
       </section>
 
       <section class="pref-section">

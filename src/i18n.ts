@@ -120,6 +120,8 @@ const en = {
   languageSystem: "System",
   startupTitle: "Startup",
   startWithSystem: "Start Quest Backlog when I sign in to my computer",
+  startWithSystemHint:
+    "Off unless you turn it on. The app starts in the tray with the panel closed, and only waits for its shortcuts. Turn it off here at any time.",
   offlineTitle: "Can't reach Quest Backlog",
   offlineBody: "Check your connection. You are still signed in on this computer.",
   retry: "Try again",
@@ -291,6 +293,8 @@ const es: Strings = {
   languageSystem: "Sistema",
   startupTitle: "Inicio",
   startWithSystem: "Abrir Quest Backlog al iniciar sesión en el equipo",
+  startWithSystemHint:
+    "Desactivado salvo que lo actives. La app se abre en la bandeja con el panel cerrado y solo espera sus atajos. Puedes desactivarlo aquí cuando quieras.",
   offlineTitle: "No se puede conectar con Quest Backlog",
   offlineBody: "Revisa tu conexión. Tu sesión en este equipo sigue iniciada.",
   retry: "Reintentar",
