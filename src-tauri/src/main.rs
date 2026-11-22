@@ -173,14 +173,12 @@ fn main() {
             tray::setup(&handle, language)?;
             hotkey::setup(&handle, &settings);
 
-            let args: Vec<String> = std::env::args().collect();
-            let show_now = wants_toggle(&args) || args.iter().any(|arg| arg == "--show");
-            let autostarted = args.iter().any(|arg| arg == AUTOSTART_FLAG);
+            // Started by the user (launcher, terminal): open the panel, as a
+            // second launch does. Started at login: stay in the tray.
+            let autostarted = std::env::args().any(|arg| arg == AUTOSTART_FLAG);
             tauri::async_runtime::spawn(async move {
-                let had_token = auth::restore(&handle).await;
-                // First run: open straight away so the user can sign in, but
-                // not over the desktop at login.
-                if (!had_token && !autostarted) || show_now {
+                auth::restore(&handle).await;
+                if !autostarted {
                     overlay::show(&handle);
                 }
             });

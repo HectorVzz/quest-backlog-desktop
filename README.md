@@ -221,8 +221,9 @@ QB_WEB_BASE_URL=http://localhost:3000 pnpm tauri dev`.
 
 Command-line flags: `--toggle` toggles the quick panel of the running
 instance, `--screenshot` takes a screenshot of the game and opens the
-composer, `--show` opens the panel at start, `--autostart` is passed by the
-login entry (the panel then stays closed). The log line
+composer, `--autostart` is passed by the login entry. Starting the app opens
+the quick panel, except with `--autostart`, where it stays in the tray. The
+log line
 `[screenshot] ... captured in N ms, ready in N ms` shows capture timings.
 
 ## How the code is laid out
