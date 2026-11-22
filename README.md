@@ -38,9 +38,14 @@ The app connects to two places only:
 
 - `quest-backlog.com`, the Quest Backlog API, and only when you do
   something: sign in, open the panel (to look up the detected game and your
-  status and hours for it), search for a game, save a status or hours, or
-  post.
+  status and hours for it), search for a game, save a status or hours,
+  post, or open the *Feed* or *My posts* tab (to load posts and comments,
+  like a post or comment on it). Post images and avatars are loaded from
+  there too.
 - `images.igdb.com`, to show game covers.
+
+Avatars or videos hosted anywhere else are not loaded; a video post shows a
+link to the post on the website instead.
 
 What the server receives:
 
@@ -51,7 +56,7 @@ What the server receives:
   matched to an executable, its Quest Backlog address name (for example
   `world-of-warcraft-forever`), to get its current record.
 - What you choose to save or post: a status, hours played, text, a
-  screenshot.
+  screenshot, a like, a comment.
 
 The executables you matched to games (`games.json`) stay on your computer.
 
@@ -61,10 +66,17 @@ The executables you matched to games (`games.json`) stay on your computer.
   shows *Open quick panel*, *Screenshot a window and post…*,
   *Preferences…*, *Quit*. The app never sits in the taskbar.
 - **Quick panel:** always on top, Escape closes it. The detected game's
-  cover and title sit at the top. Two tabs: *Status* (one-click status; the
+  cover and title sit at the top. Four tabs: *Status* (one-click status; the
   number keys 1 to 6 pick Playing, Completed, Platinum'd, Backlog, Dropped,
-  Wishlist) and *Post* (text, game, screenshot, spoiler; Ctrl+Enter posts).
-  The first time you open it, it lists these keys until you press *Got it*.
+  Wishlist), *Post* (text, game, screenshot, spoiler; Ctrl+Enter posts),
+  *Feed* and *My posts*. The first time you open it, it lists these keys
+  until you press *Got it*.
+- **Feed and My posts:** the website's activity feed (*For you* and
+  *Following*) and your own posts, ten at a time with *Load more*. Like a
+  post, open its comments to read the latest 20 and reply, or open it on the
+  website. A tab loads when you open it and again the next time the panel
+  is shown; the refresh button reloads it. Spoilers stay hidden until you
+  press *Show spoiler*.
 - **Hours played:** under the status buttons; saved on Enter or when you
   leave the field (empty keeps the saved hours). Games synced from Steam
   show Steam's hours read-only, because typing hours there would unlink
@@ -231,6 +243,7 @@ login entry (the panel then stays closed). The log line
   - `games.rs` detection, search, choosing a game, saving its status
   - `screenshot.rs` capture, resize and encode, optional local PNG copy
   - `compose.rs` screenshot flow and posting
+  - `feed.rs` Feed and My posts: pages of posts, likes, comments
   - `device.rs` the computer name and OS sent at sign-in
   - `config.rs` server addresses
 - `src/`: the interface (Vite + Preact), one bundle for both windows
@@ -245,8 +258,11 @@ login entry (the panel then stays closed). The log line
 
 The web view has only Tauri's `core:default` permissions. It never sees the
 token or the screenshot bytes (only small previews; cropping sends a
-rectangle back), and makes no HTTP
-requests; it calls the commands registered in `src-tauri/src/main.rs`.
+rectangle back), and makes no API requests; it calls the commands
+registered in `src-tauri/src/main.rs`. It only loads images, from the hosts
+the CSP in `src-tauri/tauri.conf.json` allows (`images.igdb.com`,
+`quest-backlog.com` and `localhost:4000` for a local server); `feed.rs`
+drops image addresses on any other host before they reach it.
 
 Rules for changes:
 

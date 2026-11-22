@@ -2,6 +2,7 @@ import type { ComponentChildren } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 
 import { Composer } from "./composer";
+import { FeedTab } from "./feed";
 import { errorMessage, type StatusKey, type Strings } from "./i18n";
 import { Icon } from "./icons";
 import { native, type Game, type Progress } from "./native";
@@ -28,7 +29,7 @@ interface Props {
   tips: ComponentChildren;
 }
 
-type Tab = "status" | "post";
+type Tab = "status" | "post" | "feed" | "mine";
 
 export function GamePanel({ t, shownCount, composeCount, tips }: Props) {
   const [tab, setTab] = useState<Tab>("status");
@@ -90,17 +91,22 @@ export function GamePanel({ t, shownCount, composeCount, tips }: Props) {
   const currentGame =
     view.mode === "game" ? view.game : previous?.mode === "game" ? previous.game : null;
 
+  const reading = tab === "feed" || tab === "mine";
+
   const tabs: { id: Tab; label: string }[] = [
     { id: "status", label: t.tabStatus },
     { id: "post", label: t.tabPost },
+    { id: "feed", label: t.tabFeed },
+    { id: "mine", label: t.tabMyPosts },
   ];
 
   return (
     <>
-      <Backdrop game={view.mode === "game" ? view.game : null} />
-      <Hero t={t} view={view} compact={tab === "post" || sharing} onChange={change} />
+      <Backdrop game={view.mode === "game" && !reading ? view.game : null} />
+      {!reading && <Hero t={t} view={view} compact={tab === "post" || sharing} onChange={change} />}
 
-      <div class="tabs" role="tablist">
+      {/* While reading posts the game header gives way and the tabs stay on top. */}
+      <div class="tabs" role="tablist" data-sticky={reading}>
         {tabs.map(({ id, label }) => (
           <button key={id} role="tab" class="tab" aria-selected={tab === id} onClick={() => setTab(id)}>
             {label}
@@ -166,6 +172,13 @@ export function GamePanel({ t, shownCount, composeCount, tips }: Props) {
       </div>
       <div class="tab-panel" role="tabpanel" hidden={tab !== "post"}>
         <Composer t={t} game={currentGame} active={tab === "post"} />
+      </div>
+      {/* Always mounted so a loaded list survives switching tabs; each loads when opened. */}
+      <div class="tab-panel" role="tabpanel" hidden={tab !== "feed"}>
+        <FeedTab t={t} source="feed" active={tab === "feed"} shownCount={shownCount} />
+      </div>
+      <div class="tab-panel" role="tabpanel" hidden={tab !== "mine"}>
+        <FeedTab t={t} source="mine" active={tab === "mine"} shownCount={shownCount} />
       </div>
     </>
   );
@@ -336,7 +349,7 @@ function StatusPicker({ t, game, status, active, onSaved, onShare }: PickerProps
   );
 }
 
-function formatHours(t: Strings, hours: number) {
+export function formatHours(t: Strings, hours: number) {
   return new Intl.NumberFormat(t.locale, { maximumFractionDigits: 1 }).format(hours);
 }
 

@@ -9,6 +9,7 @@ mod compose;
 mod config;
 mod detect;
 mod device;
+mod feed;
 mod games;
 mod hotkey;
 mod known_games;
@@ -128,6 +129,7 @@ fn main() {
         .manage(hotkey::HotkeyState::default())
         .manage(games::GamesState::default())
         .manage(compose::ComposeState::default())
+        .manage(feed::FeedState::default())
         .invoke_handler(tauri::generate_handler![
             compose::get_screenshot,
             compose::take_screenshot,
@@ -146,6 +148,11 @@ fn main() {
             games::choose_game,
             games::set_game_status,
             games::share_status,
+            feed::feed_page,
+            feed::my_posts_page,
+            feed::like_post,
+            feed::post_comments,
+            feed::add_comment,
             get_app_info,
             dismiss_tips,
             get_auth,
