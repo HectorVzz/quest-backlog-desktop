@@ -82,22 +82,51 @@ h2 {
   isolation: isolate;
 }
 
-/* Opacity only: a transform here would move the backdrop with it. */
-.panel > * {
-  animation: fade-in 180ms var(--qb-ease-out) both;
+/*
+ * Opening animation, replayed on each show (a and b alternate). It never
+ * starts from fully transparent, so a panel whose web view is slow to
+ * repaint is still visible. Opacity only on the children: a transform
+ * would move the backdrop with them. Closing is instant (see overlay.rs).
+ */
+.panel[data-motion="a"] > * {
+  animation: open-a 180ms var(--qb-ease-out) both;
 }
 
-.panel[data-motion="closing"] > * {
-  animation: fade-out 140ms ease-in both;
+.panel[data-motion="b"] > * {
+  animation: open-b 180ms var(--qb-ease-out) both;
 }
 
-.panel[data-motion="open"] .tabs {
-  animation: rise 240ms var(--qb-ease-out) 40ms both;
+.panel[data-motion="a"] .tabs {
+  animation: tabs-a 240ms var(--qb-ease-out) both;
 }
 
-@keyframes fade-out {
-  to {
-    opacity: 0;
+.panel[data-motion="b"] .tabs {
+  animation: tabs-b 240ms var(--qb-ease-out) both;
+}
+
+@keyframes open-a {
+  from {
+    opacity: 0.55;
+  }
+}
+
+@keyframes open-b {
+  from {
+    opacity: 0.55;
+  }
+}
+
+@keyframes tabs-a {
+  from {
+    opacity: 0.55;
+    transform: translateY(6px);
+  }
+}
+
+@keyframes tabs-b {
+  from {
+    opacity: 0.55;
+    transform: translateY(6px);
   }
 }
 

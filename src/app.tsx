@@ -12,9 +12,9 @@ export function App() {
   const [busy, setBusy] = useState(false);
   const [shownCount, setShownCount] = useState(0);
   const [composeCount, setComposeCount] = useState(0);
-  // "open" plays the opening animation, "closing" the closing one; Rust
-  // hides the window once it is done.
-  const [motion, setMotion] = useState<"open" | "closing">("open");
+  // Counts openings; alternating between two identical animations
+  // restarts the opening animation each time the panel is shown.
+  const [openings, setOpenings] = useState(0);
   const panel = useRef<HTMLElement>(null);
 
   useEffect(() => {
@@ -32,11 +32,10 @@ export function App() {
       // answers asynchronously), so refresh it each time the overlay opens.
       native.onShown(() => {
         native.appInfo().then(setInfo);
-        setMotion("open");
+        setOpenings((count) => count + 1);
         setShownCount((count) => count + 1);
         requestAnimationFrame(focusPrimary);
       }),
-      native.onHiding(() => setMotion("closing")),
       // A screenshot was taken: open the post composer with it.
       native.onCompose(() => setComposeCount((count) => count + 1)),
       // Language or shortcuts changed in Preferences.
@@ -72,7 +71,7 @@ export function App() {
 
   return (
     <ToastProvider dismissLabel={t.close}>
-      <main class="panel" data-motion={motion} ref={panel}>
+      <main class="panel" data-motion={openings % 2 ? "a" : "b"} ref={panel}>
         <header class="topbar">
           <span class="wordmark">
             <Mark size={20} />
