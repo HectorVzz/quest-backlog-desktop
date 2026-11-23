@@ -46,7 +46,9 @@ What the server receives:
 - At sign-in: your computer's name, your OS name and the app version. You
   see them when you approve the sign-in and later under Connected devices on
   the website, where you can sign the app out.
-- A detected Steam game's app id, to look the game up.
+- A detected Steam game's app id, to look the game up. For a game you
+  matched to an executable, its Quest Backlog address name (for example
+  `world-of-warcraft-forever`), to get its current record.
 - What you choose to save or post: a status, hours played, text, a
   screenshot.
 

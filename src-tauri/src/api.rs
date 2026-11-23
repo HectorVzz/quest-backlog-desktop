@@ -47,7 +47,7 @@ pub struct User {
     pub avatar_url: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Game {
     pub id: String,
@@ -296,6 +296,16 @@ impl Api {
     pub async fn game_by_steam_app(&self, token: &str, app_id: u32) -> Result<Option<Game>, ApiError> {
         let url = self.endpoint(&["games", "by-steam-app", &app_id.to_string()]);
         let response = bearer(self.client.get(url), token)
+            .send()
+            .await
+            .map_err(network)?;
+        optional_json(response).await
+    }
+
+    /// The server's current record for a game, `None` when it no longer
+    /// has one with this slug.
+    pub async fn game_by_slug(&self, token: &str, slug: &str) -> Result<Option<Game>, ApiError> {
+        let response = bearer(self.client.get(self.endpoint(&["games", slug])), token)
             .send()
             .await
             .map_err(network)?;
