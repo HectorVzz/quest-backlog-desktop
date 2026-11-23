@@ -6,9 +6,24 @@ shortcut while playing and a quick panel opens over the game. From it you
 can update the game's status and hours played, share the update to your
 feed, or post to Quest Backlog with a screenshot of the game.
 
-Status: works against quest-backlog.com since 2026-11-17, but there are no
-installers yet; build it from source (below). Tested on Linux (KDE Plasma,
-Wayland). The Windows build has never been run.
+Status: works against quest-backlog.com since 2026-11-17. Tested on Linux
+(KDE Plasma, Wayland). Windows builds are made by CI but have not been
+tested on a Windows machine yet.
+
+## Download
+
+Get the latest version from
+[GitHub Releases](https://github.com/HectorVzz/quest-backlog-desktop/releases/latest):
+
+- **Windows:** `Quest.Backlog_<version>_x64-setup.exe`. It installs for
+  your user only (no administrator rights) and adds a Start menu entry.
+  The installer is not code signed, so SmartScreen may show "Windows
+  protected your PC" for an unknown publisher: choose *More info*, then
+  *Run anyway*. If you would rather not, build it from source (below).
+- **Linux:** the `.AppImage` (`chmod +x` it and run it) or the `.deb` for
+  Debian and Ubuntu (`sudo apt install ./Quest.Backlog_<version>_amd64.deb`).
+
+There is no auto-updater; install a new version over the old one.
 
 ## What it does on your computer
 
@@ -202,7 +217,8 @@ same way for the notice shown when X closes the panel.
 ## Building
 
 You need Rust (stable), Node.js with pnpm and, on Linux, `webkit2gtk-4.1`
-and `gtk-layer-shell`.
+and `gtk-layer-shell` (on Debian/Ubuntu the `-dev` packages listed in
+`LINUX_DEPS` in `.github/workflows/release.yml`).
 
 ```bash
 pnpm install
@@ -219,6 +235,10 @@ scripts/install-local.sh --uninstall
 ```
 
 Start it from your application launcher.
+
+Installers: `pnpm tauri build --bundles nsis` on Windows,
+`pnpm tauri build --bundles appimage,deb` on Linux; they land in
+`src-tauri/target/release/bundle/`.
 
 The app talks to https://quest-backlog.com. To work against a local
 Quest Backlog server, set `QB_API_BASE_URL` and `QB_WEB_BASE_URL` at build
@@ -349,6 +369,25 @@ The quick panel on KDE Plasma (Wayland):
 - Global shortcuts: the app id must not end in `.desktop`, and the portal
   needs the installed launcher entry (`install-local.sh` writes it).
 
+Releases and CI (`.github/workflows/release.yml`):
+
+- Every pull request (and a manual run) typechecks, runs the Rust tests
+  and builds the installers on `windows-latest` and `ubuntu-22.04`. The
+  installers are kept as workflow artifacts (`quest-backlog-Windows`,
+  `quest-backlog-Linux`), so a PR shows whether Windows still compiles.
+- To cut a release: set the same version in `src-tauri/tauri.conf.json`,
+  `src-tauri/Cargo.toml` (then `cargo check` to update `Cargo.lock`) and
+  `package.json`, merge, then tag that commit `desktop-vX.Y.Z` and push the
+  tag. The workflow refuses a tag that does not match the version. It
+  creates a **draft** release with the Windows NSIS installer, the AppImage
+  and the `.deb`; check them, edit the notes and publish the draft by hand.
+  Re-running the workflow for the same tag reuses the draft.
+- Linux bundles are built on Ubuntu 22.04 so they run on older glibc too.
+  The `.deb` depends on `libgtk-layer-shell0`; its launcher entry comes from
+  `src-tauri/linux/desktop.hbs` (declares KWin's screenshot interface).
+- Nothing is code signed. Signing on Windows would need a certificate and a
+  secret in the workflow; until then SmartScreen warns.
+
 Servers and builds:
 
 - The server address is fixed at build time. A build without
@@ -374,11 +413,16 @@ Working on the interface:
 
 ## Not done yet
 
-- Windows: never built or run. Detection (registry, foreground window),
-  capture, tray, shortcut, keychain and the icon are untested there.
-- Installers: a GitHub Actions workflow building on `desktop-v*` tags (NSIS,
-  AppImage, `.deb`) and a download page on the website. No code signing,
-  so Windows SmartScreen warns about an unknown publisher.
+- Windows: built by CI, never run. Detection (registry, foreground window),
+  capture, tray, shortcut, keychain, the installer and the icon are
+  untested there.
+- Installers: built and attached to draft releases by CI, but not code
+  signed (Windows SmartScreen warns about an unknown publisher). No
+  download page on the website yet.
+- Packaged Linux builds (AppImage, `.deb`) are untested: their launcher
+  entry is not named `com.questbacklog.QuestBacklog.desktop`, so on Wayland
+  the shortcut portal may file the shortcuts under another name; use
+  `scripts/install-local.sh` on KDE for now.
 - No update notice or auto-updater; a new version means reinstalling.
 - Showing the panel in the taskbar while open: possible on Windows; not on
   KDE Wayland without giving up the overlay layer.
