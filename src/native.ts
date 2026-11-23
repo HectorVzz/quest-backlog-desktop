@@ -21,6 +21,16 @@ export interface Progress {
   hoursPlayed: number | null;
   /** Steam keeps the hours; show them read-only. */
   steamHours: boolean;
+  /** The viewer's rating, 0 to 10, and review of the game. */
+  rating: number | null;
+  review: string | null;
+}
+
+export interface SavedReview {
+  rating: number | null;
+  review: string | null;
+  /** The feed post, when the review was posted. */
+  postId: string | null;
 }
 
 export type Detection =
@@ -213,6 +223,13 @@ export const native = {
   /** Posts a status update to the feed; returns the post id. */
   shareStatus: (gameId: string, status: StatusKey, note: string, hoursPlayed: number | null) =>
     invoke<string>("share_status", { gameId, status, note, hoursPlayed }),
+  lookingForPlayers: (gameId: string) => invoke<boolean>("looking_for_players", { gameId }),
+  /** Returns the new state. */
+  setLookingForPlayers: (gameId: string, looking: boolean) =>
+    invoke<boolean>("set_looking_for_players", { gameId, looking }),
+  /** `share` also posts the review to the feed, with the hours played. */
+  saveReview: (gameId: string, rating: number | null, review: string, share: boolean, hoursPlayed: number | null) =>
+    invoke<SavedReview>("save_review", { gameId, rating, review, share, hoursPlayed }),
 
   screenshot: () => invoke<ScreenshotView>("get_screenshot"),
   takeScreenshot: (chooseWindow = false) => invoke<void>("take_screenshot", { chooseWindow }),
@@ -224,6 +241,7 @@ export const native = {
 
   feedPage: (view: FeedView, next: string | null) => invoke<FeedPage>("feed_page", { view, next }),
   myPostsPage: (next: string | null) => invoke<FeedPage>("my_posts_page", { next }),
+  gamePostsPage: (gameSlug: string, next: string | null) => invoke<FeedPage>("game_posts_page", { gameSlug, next }),
   likePost: (postId: string, liked: boolean) => invoke<Likes>("like_post", { postId, liked }),
   /** Rejects with `postGone` when the post was deleted or is hidden. */
   getPost: (postId: string) => invoke<FeedPost>("get_post", { postId }),

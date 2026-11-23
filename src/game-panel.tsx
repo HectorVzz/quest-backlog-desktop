@@ -15,6 +15,13 @@ const MAX_NOTE_CHARS = 500;
 /** In key order: 1 is Playing, 6 is Wishlist. */
 const STATUSES: StatusKey[] = ["playing", "completed", "platinumed", "backlog", "dropped", "wishlist"];
 
+/** Finishing a game offers to rate it. */
+const RATE_STATUSES: StatusKey[] = ["completed", "platinumed"];
+/** Mirrors REVIEW_MAX_LEN in src-tauri/src/games.rs and the API limit (UTF-16 units). */
+const MAX_REVIEW_CHARS = 2000;
+/** The API's rating scale, one star per point. */
+const MAX_RATING = 10;
+
 type View =
   | { mode: "detecting" }
   | { mode: "game"; game: Game; progress: Progress }
@@ -35,6 +42,9 @@ type Tab = "status" | "post" | "feed" | "mine" | "notifications";
 export function GamePanel({ t, shownCount, composeCount, tips }: Props) {
   const [tab, setTab] = useState<Tab>("status");
   const [sharing, setSharing] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
+  // Bumped by "Post the first one" so the composer attaches the game again.
+  const [attachCount, setAttachCount] = useState(0);
   const [view, setView] = useState<View>({ mode: "detecting" });
   const [previous, setPrevious] = useState<View | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -76,9 +86,26 @@ export function GamePanel({ t, shownCount, composeCount, tips }: Props) {
 
   useEffect(detect, [shownCount]);
 
-  // The share card belongs to one game.
+  // The share and review cards belong to one game.
   const gameId = view.mode === "game" ? view.game.id : null;
-  useEffect(() => setSharing(false), [gameId]);
+  useEffect(() => {
+    setSharing(false);
+    setReviewing(false);
+  }, [gameId]);
+
+  // One card at a time under the status buttons.
+  const share = () => {
+    setReviewing(false);
+    setSharing(true);
+  };
+  const review = () => {
+    setSharing(false);
+    setReviewing(true);
+  };
+  const composeAboutGame = () => {
+    setAttachCount((count) => count + 1);
+    setTab("post");
+  };
 
   const choose = (game: Game) => {
     setError(null);
@@ -114,7 +141,7 @@ export function GamePanel({ t, shownCount, composeCount, tips }: Props) {
   return (
     <>
       <Backdrop game={view.mode === "game" && !reading ? view.game : null} />
-      {!reading && <Hero t={t} view={view} compact={tab === "post" || sharing} onChange={change} />}
+      {!reading && <Hero t={t} view={view} compact={tab === "post" || sharing || reviewing} onChange={change} />}
 
       {/* While reading posts the game header gives way and the tabs stay on top. */}
       <div class="tabs" role="tablist" data-sticky={reading}>
@@ -149,18 +176,23 @@ export function GamePanel({ t, shownCount, composeCount, tips }: Props) {
               t={t}
               game={view.game}
               status={view.progress.status}
-              active={tab === "status" && !sharing}
+              active={tab === "status" && !sharing && !reviewing}
               onSaved={(progress) => setView({ ...view, progress })}
-              onShare={() => setSharing(true)}
+              onShare={share}
+              onRate={review}
             />
             <ProgressRow
               t={t}
               game={view.game}
               progress={view.progress}
-              sharing={sharing}
+              sharing={sharing || reviewing}
               onSaved={(progress) => setView({ ...view, progress })}
-              onShare={() => setSharing(true)}
+              onShare={share}
+              onRate={review}
             />
+            {view.progress.status === "playing" && (
+              <LookingToggle t={t} game={view.game} shownCount={shownCount} />
+            )}
             {sharing && view.progress.status && (
               <ShareCard
                 key={view.progress.status}
@@ -169,6 +201,15 @@ export function GamePanel({ t, shownCount, composeCount, tips }: Props) {
                 status={view.progress.status}
                 hoursPlayed={view.progress.hoursPlayed}
                 onClose={() => setSharing(false)}
+              />
+            )}
+            {reviewing && (
+              <ReviewCard
+                t={t}
+                game={view.game}
+                progress={view.progress}
+                onSaved={(progress) => setView({ ...view, progress })}
+                onClose={() => setReviewing(false)}
               />
             )}
           </>
@@ -198,11 +239,18 @@ export function GamePanel({ t, shownCount, composeCount, tips }: Props) {
         {tips}
       </div>
       <div class="tab-panel" role="tabpanel" hidden={tab !== "post"}>
-        <Composer t={t} game={currentGame} active={tab === "post"} />
+        <Composer t={t} game={currentGame} active={tab === "post"} attachCount={attachCount} />
       </div>
       {/* Always mounted so a loaded list survives switching tabs; each loads when opened. */}
       <div class="tab-panel" role="tabpanel" hidden={tab !== "feed"}>
-        <FeedTab t={t} source="feed" active={tab === "feed"} shownCount={shownCount} />
+        <FeedTab
+          t={t}
+          source="feed"
+          active={tab === "feed"}
+          shownCount={shownCount}
+          game={currentGame}
+          onCompose={composeAboutGame}
+        />
       </div>
       <div class="tab-panel" role="tabpanel" hidden={tab !== "mine"}>
         <FeedTab t={t} source="mine" active={tab === "mine"} shownCount={shownCount} />
@@ -309,9 +357,11 @@ interface PickerProps {
   onSaved: (progress: Progress) => void;
   /** Opens the share card, offered in the "Saved as" toast. */
   onShare: () => void;
+  /** Opens the review card, offered too when the game is finished. */
+  onRate: () => void;
 }
 
-function StatusPicker({ t, game, status, active, onSaved, onShare }: PickerProps) {
+function StatusPicker({ t, game, status, active, onSaved, onShare, onRate }: PickerProps) {
   const [saving, setSaving] = useState<StatusKey | null>(null);
   const toast = useToast();
   // The key handler is registered once per activation; read state through a ref.
@@ -326,7 +376,11 @@ function StatusPicker({ t, game, status, active, onSaved, onShare }: PickerProps
       .then((saved) => {
         onSaved(saved);
         if (saved.status) {
-          toast({ text: t.savedAs(t.statuses[saved.status]), action: { label: t.shareStatus, run: onShare } });
+          toast({
+            text: t.savedAs(t.statuses[saved.status]),
+            action: { label: t.shareStatus, run: onShare },
+            secondary: RATE_STATUSES.includes(saved.status) ? { label: t.rateIt, run: onRate } : undefined,
+          });
         }
       })
       .catch((key) => toast({ text: errorMessage(t, key), tone: "error" }))
@@ -387,13 +441,15 @@ interface ProgressProps {
   t: Strings;
   game: Game;
   progress: Progress;
+  /** A share or review card is open. */
   sharing: boolean;
   onSaved: (progress: Progress) => void;
   onShare: () => void;
+  onRate: () => void;
 }
 
-/** Hours played, saved on Enter or when the field loses focus, and "Post update". */
-function ProgressRow({ t, game, progress, sharing, onSaved, onShare }: ProgressProps) {
+/** Hours played, saved on Enter or when the field loses focus, "Post update" and "Rate it". */
+function ProgressRow({ t, game, progress, sharing, onSaved, onShare, onRate }: ProgressProps) {
   const saved = progress.hoursPlayed === null ? "" : String(progress.hoursPlayed);
   const [draft, setDraft] = useState(saved);
   const [busy, setBusy] = useState(false);
@@ -402,6 +458,7 @@ function ProgressRow({ t, game, progress, sharing, onSaved, onShare }: ProgressP
   useEffect(() => setDraft(saved), [game.id, saved]);
 
   const editable = progress.status !== null && !progress.steamHours;
+  const hasReview = progress.rating !== null || progress.review !== null;
   const hint = progress.steamHours ? t.hoursFromSteam : progress.status === null ? t.hoursNeedStatus : null;
 
   const save = () => {
@@ -459,10 +516,29 @@ function ProgressRow({ t, game, progress, sharing, onSaved, onShare }: ProgressP
         )}
       </label>
       {!sharing && (
-        <button class="button subtle small" disabled={progress.status === null} onClick={onShare}>
-          <Icon name="arrow" size={16} />
-          {t.shareStatus}
-        </button>
+        <div class="progress-actions">
+          {(hasReview || (progress.status && RATE_STATUSES.includes(progress.status))) && (
+            <button
+              class="button subtle small"
+              aria-label={
+                progress.rating !== null ? `${t.editReview}: ${t.ratingValue(formatHours(t, progress.rating))}` : undefined
+              }
+              title={hasReview ? t.editReview : undefined}
+              onClick={onRate}
+            >
+              <Icon name="star" size={16} filled={progress.rating !== null} />
+              {progress.rating !== null
+                ? t.ratingValue(formatHours(t, progress.rating))
+                : hasReview
+                  ? t.editReview
+                  : t.rateIt}
+            </button>
+          )}
+          <button class="button subtle small" disabled={progress.status === null} onClick={onShare}>
+            <Icon name="arrow" size={16} />
+            {t.shareStatus}
+          </button>
+        </div>
       )}
     </div>
   );
@@ -542,6 +618,238 @@ function ShareCard({ t, game, status, hoursPlayed, onClose }: ShareProps) {
           {length}/{MAX_NOTE_CHARS}
         </span>
       </div>
+    </div>
+  );
+}
+
+/**
+ * "Looking for players" for a game the viewer is playing, like the toggle
+ * on the website's backlog. Read when shown; the server ends it when the
+ * game leaves Playing.
+ */
+function LookingToggle({ t, game, shownCount }: { t: Strings; game: Game; shownCount: number }) {
+  const [looking, setLooking] = useState<boolean | null>(null);
+  const [busy, setBusy] = useState(false);
+  const toast = useToast();
+
+  useEffect(() => {
+    let current = true;
+    setLooking(null);
+    native
+      .lookingForPlayers(game.id)
+      .then((value) => current && setLooking(value))
+      // Unknown state: leave the toggle out rather than show a wrong one.
+      .catch(() => current && setLooking(null));
+    return () => {
+      current = false;
+    };
+  }, [game.id, shownCount]);
+
+  if (looking === null) return null;
+
+  const toggle = (next: boolean) => {
+    if (busy) return;
+    setBusy(true);
+    setLooking(next);
+    native
+      .setLookingForPlayers(game.id, next)
+      .then((value) => {
+        setLooking(value);
+        toast({ text: value ? t.lookingOn(game.title) : t.lookingOff(game.title) });
+      })
+      .catch((key) => {
+        setLooking(!next);
+        toast({ text: errorMessage(t, key), tone: "error" });
+      })
+      .finally(() => setBusy(false));
+  };
+
+  return (
+    <div class="looking">
+      <label class="checkbox">
+        <input
+          type="checkbox"
+          role="switch"
+          checked={looking}
+          disabled={busy}
+          aria-describedby="looking-hint"
+          onChange={(event) => toggle(event.currentTarget.checked)}
+        />
+        {t.lookingForPlayers}
+      </label>
+      <span id="looking-hint" class="muted small">
+        {t.lookingHint}
+      </span>
+    </div>
+  );
+}
+
+interface ReviewProps {
+  t: Strings;
+  game: Game;
+  progress: Progress;
+  onSaved: (progress: Progress) => void;
+  onClose: () => void;
+}
+
+/** The viewer's rating (0 to 10) and optional review, saved on the game entry or posted. */
+function ReviewCard({ t, game, progress, onSaved, onClose }: ReviewProps) {
+  const [rating, setRating] = useState(progress.rating);
+  const [text, setText] = useState(progress.review ?? "");
+  const [busy, setBusy] = useState<"save" | "post" | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const stars = useRef<HTMLDivElement>(null);
+  const toast = useToast();
+
+  useEffect(() => {
+    stars.current?.querySelector<HTMLButtonElement>('[tabindex="0"]')?.focus();
+  }, []);
+
+  // The server counts UTF-16 units, as `length` does.
+  const length = text.trim().length;
+  const changed = rating !== progress.rating || text.trim() !== (progress.review ?? "").trim();
+  const canSave = busy === null && length <= MAX_REVIEW_CHARS && changed;
+  const canPost = busy === null && length > 0 && length <= MAX_REVIEW_CHARS;
+
+  const submit = (post: boolean) => {
+    if (post ? !canPost : !canSave) return;
+    setBusy(post ? "post" : "save");
+    setError(null);
+    native
+      .saveReview(game.id, rating, text, post, progress.hoursPlayed)
+      .then((saved) => {
+        onSaved({ ...progress, rating: saved.rating, review: saved.review });
+        onClose();
+        const postId = saved.postId;
+        if (post && postId) {
+          toast({ text: t.reviewPosted, action: { label: t.viewPost, run: () => native.openPost(postId) } });
+        } else {
+          toast({ text: saved.rating === null && !saved.review ? t.reviewRemoved : t.reviewSaved });
+        }
+      })
+      .catch((key) => setError(errorMessage(t, key)))
+      .finally(() => setBusy(null));
+  };
+
+  return (
+    <div class="share review">
+      <h2 class="share-title">{t.reviewTitle(game.title)}</h2>
+      <div class="rating-row">
+        <StarRating t={t} value={rating} onChange={setRating} containerRef={stars} />
+        <span class="muted small tabular" aria-live="polite">
+          {rating === null ? t.ratingNone : t.ratingValue(formatHours(t, rating))}
+        </span>
+        {rating !== null && (
+          <button class="link-button small" onClick={() => setRating(null)}>
+            {t.clearRating}
+          </button>
+        )}
+      </div>
+      <textarea
+        class="composer-input"
+        rows={2}
+        value={text}
+        placeholder={t.reviewPlaceholder}
+        aria-label={t.reviewLabel}
+        aria-describedby="review-hint"
+        onInput={(event) => setText(event.currentTarget.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+            event.preventDefault();
+            submit(false);
+          }
+        }}
+      />
+      <p id="review-hint" class="muted small">
+        {t.reviewHint}
+      </p>
+      {error && (
+        <p class="error" role="alert">
+          {error}
+        </p>
+      )}
+      <div class="actions">
+        <button class="button primary" disabled={!canSave} onClick={() => submit(false)} title="Ctrl+Enter">
+          {busy === "save" ? t.saving : t.save}
+        </button>
+        <button class="button default" disabled={!canPost} onClick={() => submit(true)}>
+          {busy === "post" ? t.posting : t.saveAndPost}
+        </button>
+        <button class="button subtle" disabled={busy !== null} onClick={onClose}>
+          {t.cancel}
+        </button>
+        <span class={`counter share-counter ${length > MAX_REVIEW_CHARS ? "counter-over" : ""}`}>
+          {length}/{MAX_REVIEW_CHARS}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+interface StarProps {
+  t: Strings;
+  value: number | null;
+  onChange: (value: number) => void;
+  containerRef: { current: HTMLDivElement | null };
+}
+
+/** Ten stars as a radio group: arrow keys, Home and End move and choose. */
+function StarRating({ t, value, onChange, containerRef }: StarProps) {
+  const [hover, setHover] = useState<number | null>(null);
+  // A rating saved on the website may be a half point; show the stars up to it.
+  const chosen = value === null ? 0 : Math.floor(value);
+  const shown = hover ?? chosen;
+  const focusable = chosen || 1;
+
+  const choose = (next: number) => {
+    const clamped = Math.min(MAX_RATING, Math.max(1, next));
+    onChange(clamped);
+    requestAnimationFrame(() =>
+      containerRef.current?.querySelector<HTMLButtonElement>(`[data-value="${clamped}"]`)?.focus(),
+    );
+  };
+
+  const onKeyDown = (event: KeyboardEvent) => {
+    const moves: Record<string, number> = {
+      ArrowRight: chosen + 1,
+      ArrowUp: chosen + 1,
+      ArrowLeft: chosen - 1,
+      ArrowDown: chosen - 1,
+      Home: 1,
+      End: MAX_RATING,
+    };
+    if (event.key in moves) {
+      event.preventDefault();
+      choose(moves[event.key]);
+    }
+  };
+
+  return (
+    <div
+      ref={containerRef}
+      class="stars"
+      role="radiogroup"
+      aria-label={t.rating}
+      onKeyDown={onKeyDown}
+      onMouseLeave={() => setHover(null)}
+    >
+      {Array.from({ length: MAX_RATING }, (_, index) => index + 1).map((star) => (
+        <button
+          key={star}
+          type="button"
+          class="star"
+          role="radio"
+          data-value={star}
+          data-on={star <= shown}
+          aria-checked={star === chosen}
+          aria-label={t.ratingStar(star)}
+          tabIndex={star === focusable ? 0 : -1}
+          onMouseEnter={() => setHover(star)}
+          onClick={() => choose(star)}
+        >
+          <Icon name="star" size={18} filled={star <= shown} />
+        </button>
+      ))}
     </div>
   );
 }

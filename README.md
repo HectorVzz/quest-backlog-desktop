@@ -53,13 +53,15 @@ The app connects to two places only:
 
 - `quest-backlog.com`, the Quest Backlog API, and only when you do
   something: sign in, open the panel (to look up the detected game and your
-  status and hours for it, and how many notifications are unread), search
-  for a game, save a status or hours, post, open the *Feed* or *My posts*
-  tab (to load posts and comments, like a post or a comment, comment on it,
-  or delete one of your posts), or open the notifications (to load the
-  latest 20, open one, or mark them read). Nothing is checked while the
-  panel is closed, so the unread count is only as fresh as the last time
-  you opened it. Post images and avatars are loaded from there too.
+  status, hours, rating and review for it, and, while it is Playing,
+  whether you are looking for players, and how many notifications are
+  unread), search for a game, save a status, hours or a review, turn
+  *Looking for players* on or off, post, open the *Feed* or *My posts* tab
+  (to load posts and comments, like a post or a comment, comment on it, or
+  delete one of your posts), or open the notifications (to load the latest
+  20, open one, or mark them read). Nothing is checked while the panel is
+  closed, so the unread count is only as fresh as the last time you opened
+  it. Post images and avatars are loaded from there too.
 - `images.igdb.com`, to show game covers.
 
 Avatars or videos hosted anywhere else are not loaded; a video post shows a
@@ -72,10 +74,11 @@ What the server receives:
   the website, where you can sign the app out.
 - A detected Steam game's app id, to look the game up. For a game you
   matched to an executable, its Quest Backlog address name (for example
-  `world-of-warcraft-forever`), to get its current record.
-- What you choose to save or post: a status, hours played, text, a
-  screenshot, a like, a comment, deleting one of your posts, marking
-  notifications read.
+  `world-of-warcraft-forever`), to get its current record. The same name
+  when you open *This game* in the Feed tab, to load posts about it.
+- What you choose to save or post: a status, hours played, a rating and
+  review, *Looking for players*, text, a screenshot, a like, a comment,
+  deleting one of your posts, marking notifications read.
 
 The executables you matched to games (`games.json`) stay on your computer.
 
@@ -87,7 +90,8 @@ The executables you matched to games (`games.json`) stay on your computer.
 - **Quick panel:** always on top, Escape closes it. The detected game's
   cover and title sit at the top. Four tabs: *Status* (one-click status; the
   number keys 1 to 6 pick Playing, Completed, Platinum'd, Backlog, Dropped,
-  Wishlist), *Post* (text, game, screenshot, spoiler; Ctrl+Enter posts),
+  Wishlist; *Rate it* and, while Playing, *Looking for players*), *Post*
+  (text, game, screenshot, spoiler; Ctrl+Enter posts),
   *Feed* and *My posts*, plus a bell at the end of the tab row for
   notifications, with the unread count on it. The first time you open it, it lists these keys
   until you press *Got it*. Closing it with X explains that the app stays in
@@ -95,7 +99,10 @@ The executables you matched to games (`games.json`) stay on your computer.
   launcher), until you tick *Don't show this again*. Preferences can turn
   either one back on.
 - **Feed and My posts:** the website's activity feed (*For you* and
-  *Following*) and your own posts, ten at a time with *Load more*. Like a
+  *Following*), the posts about the current game (*This game*, shown once a
+  game is detected or chosen; when there are none, *Post the first one*
+  opens the Post tab with the game attached) and your own posts, ten at a
+  time with *Load more*. Like a
   post, open its comments to read the latest 20, like them and reply, or
   open it on the website. Your own posts have a delete button that asks
   for confirmation inside the post (Esc cancels); editing stays on the
@@ -116,6 +123,17 @@ The executables you matched to games (`games.json`) stay on your computer.
   "Post update" on the website, with an editable sentence and your hours.
   The "Saved as …" message offers it right after you change a status.
   Nothing is shared unless you press *Post*.
+- **Rate it:** your rating out of 10 (ten stars; arrow keys, Home and End
+  choose) and an optional review of up to 2,000 characters, as in the
+  website's status dialog. *Save* keeps them on your game entry (clearing
+  both removes them); *Save and post* also posts the review to your feed, or
+  updates the post made the last time. Offered next to *Post update* when
+  you mark a game Completed or Platinum'd, and in the panel for those
+  statuses or once you have a review.
+- **Looking for players:** shown while the game is Playing, like the toggle
+  on the website's backlog. Others playing the game can see you are looking.
+  It has no time limit: it stays on until you turn it off or the game
+  leaves Playing. The panel reads it when it opens; nothing polls.
 - **Preferences:** a normal window. Shortcuts, keeping a copy of screenshots
   and where, language (English or Spanish), start with the system.
 - **Shortcuts:** `Ctrl+Shift+G` opens the quick panel; `Ctrl+Shift+F12`
@@ -280,11 +298,13 @@ log line
   - `settings.rs` `settings.json`
   - `detect.rs` finds the running game
   - `known_games.rs` executable to game: your choices (`games.json`) and the built-in list
-  - `games.rs` detection, search, choosing a game, saving its status
+  - `games.rs` detection, search, choosing a game, saving its status,
+    rating and review, looking for players
   - `screenshot.rs` capture, resize and encode, optional local PNG copy
   - `compose.rs` screenshot flow and posting
-  - `feed.rs` Feed and My posts: pages of posts, likes, comments, comment
-    likes, deleting your posts, one post by id
+  - `feed.rs` Feed and My posts: pages of posts (home feed, one game's,
+    your own), likes, comments, comment likes, deleting your posts, one
+    post by id
   - `notifications.rs` unread count, the latest notifications, marking them
     read, opening a follower's profile
   - `device.rs` the computer name and OS sent at sign-in

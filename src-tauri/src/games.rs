@@ -6,7 +6,7 @@ use std::sync::Mutex;
 use serde::Serialize;
 use tauri::{AppHandle, Manager, State};
 
-use crate::api::{ApiError, Game, GameStatus, NewPost, PostError};
+use crate::api::{self, ApiError, Game, GameStatus, NewPost, PostError};
 use crate::auth::{self, Auth};
 use crate::detect::{self, Executable};
 use crate::known_games;
@@ -15,6 +15,10 @@ use crate::known_games;
 const STATUSES: &[&str] = &["playing", "completed", "platinumed", "backlog", "dropped", "wishlist"];
 /// Upper bound for hours played typed in the panel.
 const MAX_HOURS: f64 = 100_000.0;
+/// The API's rating scale is 0 to 10.
+const MAX_RATING: f64 = 10.0;
+/// The API's review length limit, in UTF-16 units as the server counts.
+const REVIEW_MAX_LEN: usize = 2000;
 
 /// The viewer's entry for a game.
 #[derive(Debug, Clone, Default, Serialize)]
@@ -25,6 +29,9 @@ pub struct Progress {
     pub hours_played: Option<f64>,
     /// Steam keeps the hours; the panel shows them read-only.
     pub steam_hours: bool,
+    /// The viewer's rating (0 to 10) and review, if any.
+    pub rating: Option<f64>,
+    pub review: Option<String>,
 }
 
 impl From<GameStatus> for Progress {
@@ -32,9 +39,20 @@ impl From<GameStatus> for Progress {
         Self {
             steam_hours: status.steam_owned(),
             hours_played: status.hours_played,
+            rating: status.rating,
+            review: status.review.filter(|review| !review.trim().is_empty()),
             status: Some(status.status),
         }
     }
+}
+
+/// A saved rating and review; `post_id` is the feed post when shared.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SavedReview {
+    pub rating: Option<f64>,
+    pub review: Option<String>,
+    pub post_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -254,9 +272,115 @@ pub async fn share_status(
     }
 }
 
+/// Whether the viewer is "looking for players" for the game.
+#[tauri::command]
+pub async fn looking_for_players(app: AppHandle, game_id: String) -> Result<bool, String> {
+    let auth = app.state::<Auth>();
+    let token = token(&auth)?;
+    if !api::valid_id(&game_id) {
+        return Err("failed".to_string());
+    }
+    match auth.api().looking_for_players(&token, &game_id).await {
+        Ok(looking) => Ok(looking),
+        Err(error) => Err(fail(&app, error).await),
+    }
+}
+
+/// Starts or stops "looking for players" for a game the viewer is playing.
+/// Returns the new state.
+#[tauri::command]
+pub async fn set_looking_for_players(app: AppHandle, game_id: String, looking: bool) -> Result<bool, String> {
+    let auth = app.state::<Auth>();
+    let token = token(&auth)?;
+    if !api::valid_id(&game_id) {
+        return Err("failed".to_string());
+    }
+    match auth.api().set_looking_for_players(&token, &game_id, looking).await {
+        Ok(()) => Ok(looking),
+        Err(PostError::Rejected(message)) => Err(format!("server:{message}")),
+        Err(PostError::Api(error)) => Err(fail(&app, error).await),
+    }
+}
+
+/// Rating and review as typed: the rating within the API's scale in half
+/// points, the review trimmed and within its limit, `None` when empty.
+/// Sharing needs a review, as on the website. Errors are UI message keys.
+fn valid_review(rating: Option<f64>, review: &str, share: bool) -> Result<(Option<f64>, Option<&str>), &'static str> {
+    let rating = match rating {
+        Some(value) if !value.is_finite() || !(0.0..=MAX_RATING).contains(&value) => return Err("ratingInvalid"),
+        Some(value) => Some((value * 2.0).round() / 2.0),
+        None => None,
+    };
+    let review = Some(review.trim()).filter(|text| !text.is_empty());
+    if review.is_some_and(|text| text.encode_utf16().count() > REVIEW_MAX_LEN) {
+        return Err("reviewTooLong");
+    }
+    if share && review.is_none() {
+        return Err("reviewEmpty");
+    }
+    Ok((rating, review))
+}
+
+/// Saves the viewer's rating and review on the game entry, like the
+/// website's status dialog. With `share`, also posts the review to the feed
+/// (or updates the post made last time), with the hours played.
+#[tauri::command]
+pub async fn save_review(
+    app: AppHandle,
+    game_id: String,
+    rating: Option<f64>,
+    review: String,
+    share: bool,
+    hours_played: Option<f64>,
+) -> Result<SavedReview, String> {
+    let auth = app.state::<Auth>();
+    let token = token(&auth)?;
+    if !api::valid_id(&game_id) {
+        return Err("failed".to_string());
+    }
+    let (rating, review) = valid_review(rating, &review, share)?;
+    let saved = match review.filter(|_| share) {
+        Some(text) => {
+            let hours = hours_played.map(valid_hours).transpose()?;
+            auth.api().share_review(&token, &game_id, rating, text, hours).await.map(Some)
+        }
+        None => auth.api().save_review(&token, &game_id, rating, review).await,
+    };
+    match saved {
+        Ok(saved) => {
+            let (rating, review, post_id) = saved
+                .map(|saved| (saved.rating, saved.review, saved.shared_post_id))
+                .unwrap_or_default();
+            Ok(SavedReview {
+                rating,
+                review,
+                post_id: post_id.filter(|_| share),
+            })
+        }
+        Err(PostError::Rejected(message)) => Err(format!("server:{message}")),
+        Err(PostError::Api(error)) => Err(fail(&app, error).await),
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::valid_hours;
+    use super::{valid_hours, valid_review};
+
+    #[test]
+    fn reviews_are_checked() {
+        assert_eq!(valid_review(Some(8.0), "  Great  ", false), Ok((Some(8.0), Some("Great"))));
+        assert_eq!(valid_review(Some(7.3), "", false), Ok((Some(7.5), None)));
+        assert_eq!(valid_review(None, "   ", false), Ok((None, None)));
+        assert_eq!(valid_review(Some(0.0), "", false), Ok((Some(0.0), None)));
+        assert_eq!(valid_review(Some(10.5), "", false), Err("ratingInvalid"));
+        assert_eq!(valid_review(Some(-1.0), "", false), Err("ratingInvalid"));
+        assert_eq!(valid_review(Some(f64::NAN), "", false), Err("ratingInvalid"));
+        assert_eq!(valid_review(Some(9.0), " ", true), Err("reviewEmpty"));
+        assert_eq!(valid_review(None, &"a".repeat(2001), false), Err("reviewTooLong"));
+        assert!(valid_review(None, &"a".repeat(2000), true).is_ok());
+        // The server counts UTF-16 units: an emoji is two.
+        assert_eq!(valid_review(None, &"😀".repeat(1001), false), Err("reviewTooLong"));
+    }
 
     #[test]
     fn hours_are_checked_and_rounded() {

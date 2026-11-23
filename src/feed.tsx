@@ -8,7 +8,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import { formatHours } from "./game-panel";
 import { errorMessage, type Strings } from "./i18n";
 import { Icon } from "./icons";
-import { native, type Author, type FeedComment, type FeedPost, type FeedView } from "./native";
+import { native, type Author, type FeedComment, type FeedPost, type FeedView, type Game } from "./native";
 import { useToast } from "./toast";
 
 // Mirrors COMMENT_MAX_CHARS in src-tauri/src/feed.rs and the API limit.
@@ -22,7 +22,14 @@ interface Props {
   active: boolean;
   /** Changes every time the overlay is shown, to reload on the next visit. */
   shownCount: number;
+  /** The detected or chosen game: adds "This game" to the Feed tab. */
+  game?: Game | null;
+  /** Opens the Post tab with the game attached, from an empty "This game". */
+  onCompose?: () => void;
 }
+
+/** The home feed's views, and the posts about the current game. */
+type Segment = FeedView | "game";
 
 interface ListState {
   posts: FeedPost[];
@@ -33,22 +40,30 @@ interface ListState {
 
 const EMPTY: ListState = { posts: [], next: null, loadedFor: null };
 
-export function FeedTab({ t, source, active, shownCount }: Props) {
-  const [view, setView] = useState<FeedView>("feed");
+export function FeedTab({ t, source, active, shownCount, game = null, onCompose }: Props) {
+  const [chosen, setView] = useState<Segment>("feed");
+  // Without a game, "This game" falls back to For you.
+  const view: Segment = chosen === "game" && !game ? "feed" : chosen;
+  const gameSlug = view === "game" ? game!.slug : "";
   const [list, setList] = useState<ListState>(EMPTY);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Answers from an older request (another view, a refresh) are dropped.
   const request = useRef(0);
 
-  const key = `${source}:${view}:${shownCount}`;
+  const key = `${source}:${view}:${gameSlug}:${shownCount}`;
 
   const load = (more: boolean) => {
     const id = ++request.current;
     const next = more ? list.next : null;
     setLoading(true);
     setError(null);
-    const page = source === "mine" ? native.myPostsPage(next) : native.feedPage(view, next);
+    const page =
+      source === "mine"
+        ? native.myPostsPage(next)
+        : view === "game"
+          ? native.gamePostsPage(gameSlug, next)
+          : native.feedPage(view, next);
     page
       .then((result) => {
         if (id !== request.current) return;
@@ -72,30 +87,38 @@ export function FeedTab({ t, source, active, shownCount }: Props) {
     if (active && list.loadedFor !== key) load(false);
   }, [active, key]);
 
+  // Another game's posts never show under this one.
+  useEffect(() => {
+    if (view === "game") setList(EMPTY);
+  }, [gameSlug]);
+
   const update = (post: FeedPost) =>
     setList((current) => ({ ...current, posts: current.posts.map((p) => (p.id === post.id ? post : p)) }));
   const remove = (postId: string) =>
     setList((current) => ({ ...current, posts: current.posts.filter((p) => p.id !== postId) }));
 
   const empty = source === "mine" ? t.myPostsEmpty : view === "following" ? t.followingEmpty : t.feedEmpty;
+  const segments: Segment[] = game ? ["feed", "following", "game"] : ["feed", "following"];
+  const showEmpty = list.posts.length === 0 && !loading && !error && list.loadedFor !== null;
 
   return (
     <div class="feed">
       <div class="feed-toolbar">
         {source === "feed" ? (
           <div class="segmented" role="group">
-            {(["feed", "following"] as FeedView[]).map((option) => (
+            {segments.map((option) => (
               <button
                 key={option}
                 class="segment"
                 aria-pressed={view === option}
+                title={option === "game" && game ? t.feedThisGameLabel(game.title) : undefined}
                 onClick={() => {
                   if (option === view) return;
                   setList(EMPTY);
                   setView(option);
                 }}
               >
-                {option === "feed" ? t.feedForYou : t.feedFollowing}
+                {option === "feed" ? t.feedForYou : option === "following" ? t.feedFollowing : t.feedThisGame}
               </button>
             ))}
           </div>
@@ -114,7 +137,19 @@ export function FeedTab({ t, source, active, shownCount }: Props) {
       )}
 
       {list.posts.length === 0 && loading && <p class="muted feed-note">{t.loading}</p>}
-      {list.posts.length === 0 && !loading && !error && list.loadedFor && <p class="muted feed-note">{empty}</p>}
+      {showEmpty &&
+        (view === "game" && game ? (
+          <div class="feed-note feed-empty">
+            <p class="muted">{t.gameFeedEmpty(game.title)}</p>
+            {onCompose && (
+              <button class="button default small" onClick={onCompose}>
+                {t.postFirst}
+              </button>
+            )}
+          </div>
+        ) : (
+          <p class="muted feed-note">{empty}</p>
+        ))}
 
       <ul class="post-list">
         {list.posts.map((post) => (
@@ -228,6 +263,12 @@ export function PostCard({ t, post, onChange, onRemove, initiallyOpen = false, h
               <span class="status-dot" aria-hidden="true" />
               {t.statuses[post.status]}
               {post.hoursPlayed !== null && <span class="tabular"> · {t.hours(formatHours(t, post.hoursPlayed))}</span>}
+            </span>
+          )}
+          {post.kind === "review" && post.rating !== null && (
+            <span class="post-status post-rating tabular">
+              <Icon name="star" size={14} filled />
+              {t.ratingValue(formatHours(t, post.rating))}
             </span>
           )}
         </div>
