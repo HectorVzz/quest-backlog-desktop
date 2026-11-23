@@ -131,6 +131,15 @@ const en = {
   tipScreenshot: "Screenshot the game and post it",
   tipClose: "Close the panel",
   gotIt: "Got it",
+  showTips: "Show the shortcut tips in the quick panel",
+  showCloseNotice: "Explain how to come back when I close the panel",
+  closeNoticeTitle: "Quest Backlog keeps running",
+  closeNoticeBody: (keys: string) =>
+    `Closing the panel leaves the app in the tray. Open it again with ${keys}, the tray icon or your app launcher. Quit from the tray icon.`,
+  closeNoticeBodyNoShortcut:
+    "Closing the panel leaves the app in the tray. Open it again with the tray icon or your app launcher. Quit from the tray icon.",
+  dontShowAgain: "Don't show this again",
+  closePanel: "Close panel",
   shortcutFailed:
     "The shortcut could not be registered. Bind the command quest-backlog-desktop --toggle in your system keyboard settings.",
   errors: {
@@ -304,6 +313,15 @@ const es: Strings = {
   tipScreenshot: "Captura el juego y publícalo",
   tipClose: "Cierra el panel",
   gotIt: "Entendido",
+  showTips: "Mostrar los consejos de atajos en el panel rápido",
+  showCloseNotice: "Explicar cómo volver cuando cierro el panel",
+  closeNoticeTitle: "Quest Backlog sigue abierto",
+  closeNoticeBody: (keys: string) =>
+    `Al cerrar el panel, la app queda en la bandeja. Ábrela otra vez con ${keys}, el icono de la bandeja o tu lanzador de apps. Para salir, usa el icono de la bandeja.`,
+  closeNoticeBodyNoShortcut:
+    "Al cerrar el panel, la app queda en la bandeja. Ábrela otra vez con el icono de la bandeja o tu lanzador de apps. Para salir, usa el icono de la bandeja.",
+  dontShowAgain: "No volver a mostrar",
+  closePanel: "Cerrar panel",
   shortcutFailed:
     "No se pudo registrar el atajo. Asigna el comando quest-backlog-desktop --toggle en los atajos de teclado de tu sistema.",
   errors: {

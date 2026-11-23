@@ -56,6 +56,8 @@ export interface AppInfo {
   hotkey: HotkeyStatus;
   /** The first-run shortcut tips were dismissed. */
   tipsSeen: boolean;
+  /** The close notice was turned off. */
+  closeNoticeSeen: boolean;
 }
 
 /** Fractions (0 to 1) of the whole capture's width and height. */
@@ -91,6 +93,10 @@ export interface Preferences {
   screenshotFolder: string | null;
   language: "en" | "es" | null;
   startWithSystem: boolean;
+  /** The shortcut tips in the quick panel. */
+  showTips: boolean;
+  /** The notice shown when the panel is closed with its X button. */
+  showCloseNotice: boolean;
   hotkeys: HotkeyStatus;
 }
 
@@ -162,6 +168,7 @@ export interface Comments {
 export const native = {
   appInfo: () => invoke<AppInfo>("get_app_info"),
   dismissTips: () => invoke<void>("dismiss_tips"),
+  dismissCloseNotice: () => invoke<void>("dismiss_close_notice"),
   auth: () => invoke<AuthView>("get_auth"),
   startSignIn: () => invoke<void>("start_sign_in"),
   cancelSignIn: () => invoke<void>("cancel_sign_in"),

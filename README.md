@@ -70,7 +70,10 @@ The executables you matched to games (`games.json`) stay on your computer.
   number keys 1 to 6 pick Playing, Completed, Platinum'd, Backlog, Dropped,
   Wishlist), *Post* (text, game, screenshot, spoiler; Ctrl+Enter posts),
   *Feed* and *My posts*. The first time you open it, it lists these keys
-  until you press *Got it*.
+  until you press *Got it*. Closing it with X explains that the app stays in
+  the tray and how to come back (the shortcut, the tray icon or the app
+  launcher), until you tick *Don't show this again*. Preferences can turn
+  either one back on.
 - **Feed and My posts:** the website's activity feed (*For you* and
   *Following*) and your own posts, ten at a time with *Load more*. Like a
   post, open its comments to read the latest 20 and reply, or open it on the
@@ -185,13 +188,16 @@ them from Preferences:
   "saveScreenshots": false,
   "screenshotFolder": null,
   "language": null,
-  "tipsSeen": false
+  "tipsSeen": false,
+  "closeNoticeSeen": false
 }
 ```
 
 `screenshotFolder: null` means `<Pictures>/Quest Backlog`. `language` is
 `"en"`, `"es"` or `null` (the system language). `tipsSeen` turns into
-`true` when you dismiss the quick panel's shortcut list.
+`true` when you dismiss the quick panel's shortcut list, and back to
+`false` when Preferences turns it on again; `closeNoticeSeen` works the
+same way for the notice shown when X closes the panel.
 
 ## Building
 

@@ -32,6 +32,8 @@ struct AppInfo {
     hotkey: hotkey::HotkeyStatus,
     /// Whether the first-run shortcut tips were dismissed.
     tips_seen: bool,
+    /// Whether the close notice was turned off.
+    close_notice_seen: bool,
 }
 
 #[tauri::command]
@@ -42,6 +44,7 @@ fn get_app_info(app: AppHandle) -> AppInfo {
         language: settings::language(&settings),
         hotkey: hotkey::status(&app),
         tips_seen: settings.tips_seen,
+        close_notice_seen: settings.close_notice_seen,
     }
 }
 
@@ -52,6 +55,16 @@ fn dismiss_tips(app: AppHandle) -> Result<(), String> {
         return Ok(());
     }
     settings.tips_seen = true;
+    settings::store(&app, settings)
+}
+
+#[tauri::command]
+fn dismiss_close_notice(app: AppHandle) -> Result<(), String> {
+    let mut settings = settings::current(&app);
+    if settings.close_notice_seen {
+        return Ok(());
+    }
+    settings.close_notice_seen = true;
     settings::store(&app, settings)
 }
 
@@ -155,6 +168,7 @@ fn main() {
             feed::add_comment,
             get_app_info,
             dismiss_tips,
+            dismiss_close_notice,
             get_auth,
             start_sign_in,
             cancel_sign_in,
@@ -176,11 +190,11 @@ fn main() {
             // Started by the user (launcher, terminal): open the panel, as a
             // second launch does. Started at login: stay in the tray.
             let autostarted = std::env::args().any(|arg| arg == AUTOSTART_FLAG);
+            if !autostarted {
+                overlay::show(&handle);
+            }
             tauri::async_runtime::spawn(async move {
                 auth::restore(&handle).await;
-                if !autostarted {
-                    overlay::show(&handle);
-                }
             });
             Ok(())
         })

@@ -708,6 +708,41 @@ h2 {
   display: contents;
 }
 
+/* ---------- Close notice ---------- */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: var(--qb-space-4);
+  background: rgb(0 0 0 / 0.55);
+}
+
+.modal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--qb-space-3);
+  max-width: 400px;
+  padding: var(--qb-space-4);
+  border-radius: var(--qb-radius-lg);
+  border: 1px solid var(--qb-color-border-strong);
+  background: var(--qb-color-raised);
+  animation: rise 180ms var(--qb-ease-out) both;
+}
+
+.modal h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.modal p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .tip dt {
   justify-self: start;
 }
