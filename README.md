@@ -6,8 +6,9 @@ shortcut while playing and a quick panel opens over the game. From it you
 can update the game's status and hours played, share the update to your
 feed, or post to Quest Backlog with a screenshot of the game.
 
-Status: in development, no releases yet. Tested on Linux (KDE Plasma,
-Wayland); the Windows build is not tested yet.
+Status: works against quest-backlog.com since 2026-11-17, but there are no
+installers yet; build it from source (below). Tested on Linux (KDE Plasma,
+Wayland). The Windows build has never been run.
 
 ## What it does on your computer
 
@@ -126,6 +127,11 @@ Each time the quick panel opens, the app looks for the running game:
    and remembers your answer.
 
 Native Linux games outside Steam are not detected; search for them instead.
+
+`games.json` keeps the game you chose, and each time it is detected the app
+asks the server for that game's current record by its slug: game ids are
+the server's own and differ between servers. If the server no longer has
+that game, the choice is forgotten and the panel asks again.
 
 ### Posts and screenshots
 
@@ -253,6 +259,106 @@ Rules for changes:
 Memory: WebKitGTK costs about 190 MB per open web view on Linux. Only the
 quick panel's web view is kept; Preferences is created when opened and
 destroyed when closed.
+
+## Troubleshooting
+
+The app logs one line per event, in the journal on Linux
+(`journalctl --user | grep 'quest-backlog-desktop\['`) or on stderr when run
+from a terminal:
+
+- `[hotkey] portal bound …` at start: the shortcuts the desktop assigned.
+- `[hotkey] activated toggle-overlay` / `screenshot`: a shortcut fired.
+- `[overlay] show (visible before: …)` / `[overlay] hide`: the panel was
+  opened or closed, from any source (shortcut, tray, `--toggle`).
+- `[screenshot] ActiveWindow captured in N ms, ready in N ms`, with
+  `(overlay kept)` when the panel stayed open during the capture.
+- `[games] …`: a remembered game could not be refreshed or saved.
+
+If the panel "does not open": when the log shows `[overlay] show` but
+nothing appears, the app did its part and the compositor did not display
+it; see the notes below. If there is no `show` line, the click or shortcut
+never reached the app.
+
+If saving a status fails for a detected non-Steam game, delete its entry in
+`games.json` (next to `settings.json`) and choose the game again.
+
+## Notes for maintainers
+
+Things learned building and testing the app, so they are not relearned.
+
+The quick panel on KDE Plasma (Wayland):
+
+- It is a `gtk-layer-shell` surface on the overlay layer, which is what
+  keeps it above borderless-fullscreen games. The layer shell has to be
+  initialized after unrealizing the window Tauri already realized
+  (`overlay.rs`).
+- Keep the window **opaque**. A transparent window (for rounded corners and
+  a shadow) was tried and the panel could not be confirmed to show.
+- **No closing animation.** When the panel is shown again, KWin can first
+  display the last frame drawn before it was hidden, and the web view does
+  not always repaint at once. A fade-out left that last frame transparent,
+  so the panel looked like it never opened from the tray or the screenshot
+  shortcut. The opening animation starts from 55% opacity for the same
+  reason (`src/app.css`).
+- To check whether the panel is really on screen without capturing the
+  screen, ask KWin. Save this as `probe.js`:
+
+  ```js
+  for (const w of workspace.stackingOrder) {
+    if (w.resourceClass === "quest-backlog-desktop")
+      console.info("QBPROBE", "layer=" + w.layer, "hidden=" + w.hidden, JSON.stringify(w.frameGeometry));
+  }
+  ```
+
+  then run it and read the result in the journal:
+
+  ```bash
+  id=$(qdbus6 org.kde.KWin /Scripting org.kde.kwin.Scripting.loadScript "$PWD/probe.js" qbprobe)
+  qdbus6 org.kde.KWin /Scripting/Script$id org.kde.kwin.Script.run
+  qdbus6 org.kde.KWin /Scripting org.kde.kwin.Scripting.unloadScript qbprobe
+  journalctl --user --since -10s -o cat | grep QBPROBE
+  ```
+
+- The tray's left click can be triggered like Plasma does:
+  `gdbus call --session --dest org.kde.StatusNotifierItem-<pid>-1
+  --object-path /StatusNotifierItem --method
+  org.kde.StatusNotifierItem.Activate 0 0`.
+- Global shortcuts: the app id must not end in `.desktop`, and the portal
+  needs the installed launcher entry (`install-local.sh` writes it).
+
+Servers and builds:
+
+- The server address is fixed at build time. A build without
+  `QB_API_BASE_URL` / `QB_WEB_BASE_URL` talks to production; `cargo` does
+  rebuild when they change. A device token from one server is invalid on
+  another, so switching servers means signing in again.
+- Check which server a binary uses:
+  `strings ~/.local/bin/quest-backlog-desktop | grep -o 'https://quest-backlog.com/api'`.
+- A release build (`install-local.sh`) takes about 75 seconds after the
+  first one.
+
+Working on the interface:
+
+- The web view only talks to Rust through `window.__TAURI_INTERNALS__`, so
+  the panel can be previewed in a browser with `pnpm vite` and a small
+  script that defines `__TAURI_INTERNALS__.invoke` (returning canned
+  `get_app_info`, `get_auth`, `detect_game`, … results) and
+  `transformCallback`, injected before the page's own scripts. Size the
+  viewport to the window (560 x 600) and check that nothing scrolls.
+- Style rules (from the Quest Backlog web redesign): flat surfaces, one
+  accent for the primary action, status colors only for statuses, sentence
+  case, no uppercase labels, quiet motion, cover art carries the color.
+
+## Not done yet
+
+- Windows: never built or run. Detection (registry, foreground window),
+  capture, tray, shortcut, keychain and the icon are untested there.
+- Installers: a GitHub Actions workflow building on `desktop-v*` tags (NSIS,
+  AppImage, `.deb`) and a download page on the website. No code signing,
+  so Windows SmartScreen warns about an unknown publisher.
+- No update notice or auto-updater; a new version means reinstalling.
+- Showing the panel in the taskbar while open: possible on Windows; not on
+  KDE Wayland without giving up the overlay layer.
 
 ## License
 
