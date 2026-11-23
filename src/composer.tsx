@@ -15,9 +15,11 @@ interface Props {
   game: Game | null;
   /** True while this tab is shown, to focus the text box. */
   active: boolean;
+  /** Changes when another tab asks to post about the game, to attach it again. */
+  attachCount?: number;
 }
 
-export function Composer({ t, game, active }: Props) {
+export function Composer({ t, game, active, attachCount = 0 }: Props) {
   const [content, setContent] = useState("");
   const [spoiler, setSpoiler] = useState(false);
   const [withGame, setWithGame] = useState(true);
@@ -41,7 +43,7 @@ export function Composer({ t, game, active }: Props) {
   }, []);
 
   // A different game becomes attached again by default.
-  useEffect(() => setWithGame(true), [game?.id]);
+  useEffect(() => setWithGame(true), [game?.id, attachCount]);
 
   useEffect(() => {
     if (active && !cropping) requestAnimationFrame(() => textarea.current?.focus());

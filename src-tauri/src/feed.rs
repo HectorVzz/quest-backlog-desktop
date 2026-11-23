@@ -253,20 +253,43 @@ pub async fn feed_page(
     }
 }
 
+/// The offset a previous page returned as `next`; nothing is the start.
+fn offset_of(next: Option<&str>) -> Result<u32, String> {
+    match next {
+        None => Ok(0),
+        Some(value) => value
+            .parse::<u32>()
+            .ok()
+            .filter(|offset| *offset <= MAX_OFFSET)
+            .ok_or_else(|| "failed".to_string()),
+    }
+}
+
 /// A page of the signed-in user's own posts.
 #[tauri::command]
 pub async fn my_posts_page(app: AppHandle, next: Option<String>) -> Result<FeedPage, String> {
     let token = auth::required_token(&app)?;
     let viewer = signed_in_user(&app).ok_or("signedOut")?;
-    let offset = match next.as_deref() {
-        None => 0,
-        Some(value) => value
-            .parse::<u32>()
-            .ok()
-            .filter(|offset| *offset <= MAX_OFFSET)
-            .ok_or("failed")?,
-    };
+    let offset = offset_of(next.as_deref())?;
     match app.state::<Auth>().api().user_posts_page(&token, &viewer.id, offset).await {
+        Ok(result) => {
+            let next = result.next_offset.map(|offset| offset.to_string());
+            Ok(page(result, &viewer.id, next))
+        }
+        Err(error) => Err(fail(&app, error).await),
+    }
+}
+
+/// A page of the posts about one game (the Feed tab's "This game").
+#[tauri::command]
+pub async fn game_posts_page(app: AppHandle, game_slug: String, next: Option<String>) -> Result<FeedPage, String> {
+    let token = auth::required_token(&app)?;
+    let viewer = signed_in_user(&app).ok_or("signedOut")?;
+    if !api::valid_slug(&game_slug) {
+        return Err("failed".to_string());
+    }
+    let offset = offset_of(next.as_deref())?;
+    match app.state::<Auth>().api().game_posts_page(&token, &game_slug, offset).await {
         Ok(result) => {
             let next = result.next_offset.map(|offset| offset.to_string());
             Ok(page(result, &viewer.id, next))
@@ -390,7 +413,7 @@ pub async fn add_comment(
 
 #[cfg(test)]
 mod tests {
-    use super::{allowed_image, feed_comment};
+    use super::{allowed_image, feed_comment, offset_of};
     use crate::api::Comment;
 
     #[test]
@@ -410,6 +433,16 @@ mod tests {
         assert!(!reply.mine);
         assert_eq!(reply.content, "");
         assert_eq!((reply.like_count, reply.liked_by_me), (1, false));
+    }
+
+    #[test]
+    fn offsets_come_back_as_numbers() {
+        assert_eq!(offset_of(None), Ok(0));
+        assert_eq!(offset_of(Some("20")), Ok(20));
+        assert_eq!(offset_of(Some("10000")), Ok(10_000));
+        assert!(offset_of(Some("10001")).is_err());
+        assert!(offset_of(Some("-1")).is_err());
+        assert!(offset_of(Some("abc")).is_err());
     }
 
     #[test]

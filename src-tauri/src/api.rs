@@ -69,6 +69,11 @@ pub struct GameStatus {
     pub synced_with_steam: bool,
     #[serde(default)]
     pub steam_app_id: Option<i64>,
+    /// The viewer's review of the game (0 to 10), sent along with the status.
+    #[serde(default)]
+    pub rating: Option<f64>,
+    #[serde(default)]
+    pub review: Option<String>,
 }
 
 impl GameStatus {
@@ -82,6 +87,31 @@ impl GameStatus {
 #[derive(Debug, Clone, Deserialize)]
 pub struct CreatedPost {
     pub id: String,
+}
+
+/// The viewer's rating and review of a game.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Review {
+    #[serde(default)]
+    pub rating: Option<f64>,
+    #[serde(default)]
+    pub review: Option<String>,
+    /// The feed post made from the review, once shared.
+    #[serde(default)]
+    pub shared_post_id: Option<String>,
+}
+
+/// A play listing, only as far as "looking for players" needs it.
+#[derive(Debug, Deserialize)]
+struct PlayListing {
+    /// "open" (looking for players) or "session" (a scheduled game).
+    kind: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct PlayListingPage {
+    items: Vec<PlayListing>,
 }
 
 /// A post as the feed endpoints return it (only the fields the app shows).
@@ -483,6 +513,78 @@ impl Api {
         json(response).await
     }
 
+    /// Whether the viewer is "looking for players" for a game, like the
+    /// website's backlog toggle: an open listing among the viewer's own.
+    pub async fn looking_for_players(&self, token: &str, game_id: &str) -> Result<bool, ApiError> {
+        let mut url = self.endpoint(&["play", "listings"]);
+        url.query_pairs_mut()
+            .append_pair("view", "mine")
+            .append_pair("gameId", game_id)
+            .append_pair("limit", &LISTINGS_LIMIT.to_string());
+        let response = bearer(self.client.get(url), token).send().await.map_err(network)?;
+        let page: PlayListingPage = json(response).await?;
+        Ok(page.items.iter().any(|listing| listing.kind == "open"))
+    }
+
+    /// Starts or stops "looking for players". The server only allows it
+    /// while the game is Playing and ends it when the game leaves Playing.
+    pub async fn set_looking_for_players(&self, token: &str, game_id: &str, looking: bool) -> Result<(), PostError> {
+        let url = self.endpoint(&["play", "looking", game_id]);
+        let request = if looking { self.client.put(url) } else { self.client.delete(url) };
+        let response = bearer(request, token)
+            .send()
+            .await
+            .map_err(|error| PostError::Api(network(error)))?;
+        rejectable_json::<serde_json::Value>(response).await.map(|_| ())
+    }
+
+    /// Saves the viewer's rating and review on the game entry. Both `None`
+    /// removes them; the server then answers with nothing.
+    pub async fn save_review(
+        &self,
+        token: &str,
+        game_id: &str,
+        rating: Option<f64>,
+        review: Option<&str>,
+    ) -> Result<Option<Review>, PostError> {
+        let response = bearer(self.client.post(self.endpoint(&["reviews"])), token)
+            .json(&json!({ "gameId": game_id, "rating": rating, "review": review }))
+            .send()
+            .await
+            .map_err(|error| PostError::Api(network(error)))?;
+        if response.status() == StatusCode::BAD_REQUEST {
+            return Err(rejected(response).await);
+        }
+        if response.status() == StatusCode::NOT_FOUND {
+            return Err(PostError::Api(ApiError::Failed));
+        }
+        optional_json(response).await.map_err(PostError::Api)
+    }
+
+    /// Saves the review and posts it to the feed, or updates the post made
+    /// the last time it was shared.
+    pub async fn share_review(
+        &self,
+        token: &str,
+        game_id: &str,
+        rating: Option<f64>,
+        review: &str,
+        hours_played: Option<f64>,
+    ) -> Result<Review, PostError> {
+        let body = json!({
+            "gameId": game_id,
+            "rating": rating,
+            "review": review,
+            "hoursPlayed": hours_played,
+        });
+        let response = bearer(self.client.post(self.endpoint(&["reviews", "share"])), token)
+            .json(&body)
+            .send()
+            .await
+            .map_err(|error| PostError::Api(network(error)))?;
+        rejectable_json(response).await
+    }
+
     /// `POST /api/posts` as multipart, like the web composer.
     pub async fn create_post(&self, token: &str, post: NewPost<'_>) -> Result<CreatedPost, PostError> {
         use reqwest::multipart::{Form, Part};
@@ -546,6 +648,18 @@ impl Api {
     pub async fn user_posts_page(&self, token: &str, user_id: &str, offset: u32) -> Result<PostPage, ApiError> {
         let mut url = self.endpoint(&["posts", "user", user_id, "page"]);
         url.query_pairs_mut()
+            .append_pair("offset", &offset.to_string())
+            .append_pair("limit", &PAGE_SIZE.to_string());
+        let response = bearer(self.client.get(url), token).send().await.map_err(network)?;
+        json(response).await
+    }
+
+    /// A page of the posts about one game, as on the game's page on the
+    /// website.
+    pub async fn game_posts_page(&self, token: &str, game_slug: &str, offset: u32) -> Result<PostPage, ApiError> {
+        let mut url = self.endpoint(&["posts", "feed-page"]);
+        url.query_pairs_mut()
+            .append_pair("gameSlug", game_slug)
             .append_pair("offset", &offset.to_string())
             .append_pair("limit", &PAGE_SIZE.to_string());
         let response = bearer(self.client.get(url), token).send().await.map_err(network)?;
@@ -667,20 +781,28 @@ const PAGE_SIZE: u32 = 10;
 const COMMENTS_PAGE_SIZE: u32 = 20;
 const NOTIFICATIONS_PAGE_SIZE: u32 = 20;
 
+/// The viewer's listings read for one game: at most one open listing per
+/// game, and a few sessions (the server allows five at a time).
+const LISTINGS_LIMIT: u32 = 60;
+
 /// A 400 carries a message for the user (quota, moderation, validation).
 async fn rejectable_json<T: DeserializeOwned>(response: Response) -> Result<T, PostError> {
     if response.status() == StatusCode::BAD_REQUEST {
-        let message = response
-            .json::<ErrorBody>()
-            .await
-            .ok()
-            .and_then(|body| body.message());
-        return Err(match message {
-            Some(message) => PostError::Rejected(message),
-            None => PostError::Api(ApiError::Failed),
-        });
+        return Err(rejected(response).await);
     }
     json(response).await.map_err(PostError::Api)
+}
+
+async fn rejected(response: Response) -> PostError {
+    let message = response
+        .json::<ErrorBody>()
+        .await
+        .ok()
+        .and_then(|body| body.message());
+    match message {
+        Some(message) => PostError::Rejected(message),
+        None => PostError::Api(ApiError::Failed),
+    }
 }
 
 /// Whether an id from the webview looks like a server id (cuid or uuid),
@@ -691,9 +813,18 @@ pub fn valid_id(id: &str) -> bool {
         && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
 }
 
+/// Whether a game slug from the webview looks like a server slug
+/// (`world-of-warcraft-forever`), before it goes into a query.
+pub fn valid_slug(slug: &str) -> bool {
+    !slug.is_empty()
+        && slug.len() <= 200
+        && slug.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.')
+        && slug.chars().any(|c| c.is_ascii_alphanumeric())
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{Api, Comment, Notification};
+    use super::{valid_slug, Api, Comment, Notification};
 
     #[test]
     fn comment_keeps_like_fields() {
@@ -723,6 +854,18 @@ mod tests {
         assert!(list[0].read_at.is_none());
         assert!(list[1].actor.is_none());
         assert!(list[1].read_at.is_some());
+    }
+
+    #[test]
+    fn slugs_are_checked() {
+        assert!(valid_slug("world-of-warcraft-forever"));
+        assert!(valid_slug("doom--1"));
+        assert!(valid_slug("half-life-2"));
+        assert!(!valid_slug(""));
+        assert!(!valid_slug(".."));
+        assert!(!valid_slug("a b"));
+        assert!(!valid_slug("a/b"));
+        assert!(!valid_slug(&"a".repeat(201)));
     }
 
     #[test]

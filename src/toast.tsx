@@ -6,10 +6,17 @@ import { useCallback, useContext, useEffect, useRef, useState } from "preact/hoo
 
 import { Icon } from "./icons";
 
+export interface ToastAction {
+  label: string;
+  run: () => void;
+}
+
 export interface Toast {
   text: string;
   tone?: "success" | "error";
-  action?: { label: string; run: () => void };
+  action?: ToastAction;
+  /** A second choice after `action` ("Rate it" next to "Post update"). */
+  secondary?: ToastAction;
 }
 
 const VISIBLE_MS = 3200;
@@ -50,16 +57,20 @@ export function ToastProvider({ children, dismissLabel }: { children: ComponentC
               <Icon name={current.tone === "error" ? "close" : "check"} size={16} />
             </span>
             <span class="toast-text">{current.text}</span>
-            {current.action && (
-              <button
-                class="toast-action"
-                onClick={() => {
-                  current.action!.run();
-                  dismiss(current.id);
-                }}
-              >
-                {current.action.label}
-              </button>
+            {[current.action, current.secondary].map(
+              (action) =>
+                action && (
+                  <button
+                    key={action.label}
+                    class="toast-action"
+                    onClick={() => {
+                      action.run();
+                      dismiss(current.id);
+                    }}
+                  >
+                    {action.label}
+                  </button>
+                ),
             )}
             <button class="toast-close" aria-label={dismissLabel} onClick={() => dismiss(current.id)}>
               <Icon name="close" size={14} />
