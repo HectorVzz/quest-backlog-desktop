@@ -6,6 +6,7 @@ import { FeedTab } from "./feed";
 import { errorMessage, type StatusKey, type Strings } from "./i18n";
 import { Icon } from "./icons";
 import { native, type Game, type Progress } from "./native";
+import { NotificationsTab } from "./notifications";
 import { useToast } from "./toast";
 
 /** Status update posts share the API's 500-character post limit. */
@@ -29,7 +30,7 @@ interface Props {
   tips: ComponentChildren;
 }
 
-type Tab = "status" | "post" | "feed" | "mine";
+type Tab = "status" | "post" | "feed" | "mine" | "notifications";
 
 export function GamePanel({ t, shownCount, composeCount, tips }: Props) {
   const [tab, setTab] = useState<Tab>("status");
@@ -37,10 +38,20 @@ export function GamePanel({ t, shownCount, composeCount, tips }: Props) {
   const [view, setView] = useState<View>({ mode: "detecting" });
   const [previous, setPrevious] = useState<View | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [unread, setUnread] = useState(0);
 
   useEffect(() => {
     if (composeCount > 0) setTab("post");
   }, [composeCount]);
+
+  // The unread count is asked for each time the panel is shown, never in
+  // the background. Without it the bell just shows no badge.
+  useEffect(() => {
+    native
+      .unreadNotifications()
+      .then(setUnread)
+      .catch(() => {});
+  }, [shownCount]);
 
   const detect = () => {
     setView({ mode: "detecting" });
@@ -91,7 +102,7 @@ export function GamePanel({ t, shownCount, composeCount, tips }: Props) {
   const currentGame =
     view.mode === "game" ? view.game : previous?.mode === "game" ? previous.game : null;
 
-  const reading = tab === "feed" || tab === "mine";
+  const reading = tab === "feed" || tab === "mine" || tab === "notifications";
 
   const tabs: { id: Tab; label: string }[] = [
     { id: "status", label: t.tabStatus },
@@ -112,6 +123,22 @@ export function GamePanel({ t, shownCount, composeCount, tips }: Props) {
             {label}
           </button>
         ))}
+        {/* An icon tab at the end: the row has no room for a fifth label. */}
+        <button
+          role="tab"
+          class="tab tab-icon"
+          aria-selected={tab === "notifications"}
+          aria-label={unread > 0 ? t.notificationsUnread(unread) : t.tabNotifications}
+          title={t.tabNotifications}
+          onClick={() => setTab("notifications")}
+        >
+          <Icon name="bell" size={18} />
+          {unread > 0 && (
+            <span class="badge tabular" aria-hidden="true">
+              {unread > 9 ? "9+" : unread}
+            </span>
+          )}
+        </button>
       </div>
 
       {/* Both stay mounted so a post draft survives switching tabs. */}
@@ -179,6 +206,9 @@ export function GamePanel({ t, shownCount, composeCount, tips }: Props) {
       </div>
       <div class="tab-panel" role="tabpanel" hidden={tab !== "mine"}>
         <FeedTab t={t} source="mine" active={tab === "mine"} shownCount={shownCount} />
+      </div>
+      <div class="tab-panel" role="tabpanel" hidden={tab !== "notifications"}>
+        <NotificationsTab t={t} active={tab === "notifications"} shownCount={shownCount} onUnread={setUnread} />
       </div>
     </>
   );

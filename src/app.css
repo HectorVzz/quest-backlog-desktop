@@ -1448,10 +1448,6 @@ body:has(.window) {
   color: var(--qb-color-danger);
 }
 
-.post-open {
-  margin-left: auto;
-}
-
 .thread {
   display: flex;
   flex-direction: column;
@@ -1510,4 +1506,181 @@ body:has(.window) {
   flex: 1;
   min-height: 34px;
   background: var(--qb-color-page);
+}
+
+/* ---------- Deleting a post ---------- */
+
+.danger {
+  background: var(--qb-color-danger);
+  color: #fff;
+}
+
+.danger:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+.post-actions-end {
+  display: inline-flex;
+  gap: var(--qb-space-1);
+  margin-left: auto;
+}
+
+.confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--qb-space-2);
+  padding: var(--qb-space-2) var(--qb-space-3);
+  border-radius: var(--qb-radius-md);
+  background: var(--qb-color-danger-subtle);
+}
+
+.confirm-text {
+  margin: 0;
+  font-size: 13px;
+}
+
+/* ---------- Comment likes ---------- */
+
+.comment-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--qb-space-2);
+  margin-left: -6px;
+}
+
+.comment-like {
+  height: 24px;
+  font-size: 12px;
+}
+
+.comment[data-highlight] {
+  margin: -4px -6px;
+  padding: 4px 6px;
+  border-radius: var(--qb-radius-md);
+  background: var(--qb-color-accent-subtle);
+}
+
+/* ---------- Notifications ---------- */
+
+.tab-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  margin-left: auto;
+  padding-inline: 4px;
+}
+
+.badge {
+  position: absolute;
+  top: 2px;
+  right: -6px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--qb-color-accent);
+  color: var(--qb-color-on-accent);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+}
+
+.notification-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.notification-list > li + li {
+  border-top: 1px solid var(--qb-color-border);
+}
+
+.notification {
+  display: flex;
+  align-items: center;
+  gap: var(--qb-space-3);
+  width: 100%;
+  padding: var(--qb-space-3) var(--qb-space-2);
+  font: inherit;
+  text-align: left;
+  color: var(--qb-color-text);
+  background: transparent;
+  border: 0;
+  border-radius: var(--qb-radius-md);
+}
+
+button.notification {
+  cursor: pointer;
+  transition: background var(--qb-motion-fast);
+}
+
+button.notification:hover {
+  background: var(--qb-color-overlay);
+}
+
+.notification[data-read="true"] {
+  color: var(--qb-color-text-secondary);
+}
+
+.notification > .icon {
+  flex-shrink: 0;
+  color: var(--qb-color-text-muted);
+}
+
+.notification-avatar {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.notification-kind {
+  position: absolute;
+  right: -4px;
+  bottom: -2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 17px;
+  height: 17px;
+  border-radius: 999px;
+  border: 1.5px solid var(--qb-color-page);
+  background: var(--qb-color-raised);
+  color: var(--qb-color-text-secondary);
+}
+
+.notification-kind[data-kind="like"],
+.notification-kind[data-kind="commentLike"] {
+  color: var(--qb-color-danger);
+}
+
+.notification-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+  line-height: 1.35;
+}
+
+.notification-text {
+  overflow-wrap: anywhere;
+}
+
+.unread-dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--qb-color-accent);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }

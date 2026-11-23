@@ -1,5 +1,5 @@
 //! Reading posts in the quick panel: the home feed (For you, Following),
-//! the viewer's own posts, likes and comments. Everything goes through the
+//! the viewer's own posts, likes, comments and deleting the viewer's posts. Everything goes through the
 //! device token held by `auth`; the webview gets plain view models.
 //!
 //! Images are shown with `<img>` in the webview, so only addresses on the
@@ -97,6 +97,8 @@ pub struct FeedComment {
     pub content: String,
     pub image: Option<Image>,
     pub created_at: String,
+    pub like_count: u32,
+    pub liked_by_me: bool,
     pub replies: Vec<FeedComment>,
 }
 
@@ -109,7 +111,7 @@ pub struct Comments {
     pub total: u32,
 }
 
-fn signed_in_user(app: &AppHandle) -> Option<User> {
+pub(crate) fn signed_in_user(app: &AppHandle) -> Option<User> {
     match app.state::<Auth>().view() {
         AuthView::SignedIn { user } => Some(user),
         _ => None,
@@ -117,7 +119,7 @@ fn signed_in_user(app: &AppHandle) -> Option<User> {
 }
 
 /// Keeps an image address only when the webview may load it.
-fn allowed_image(url: Option<&str>) -> Option<String> {
+pub(crate) fn allowed_image(url: Option<&str>) -> Option<String> {
     let url = Url::parse(url?.trim()).ok()?;
     let api = Url::parse(config::api_base()).ok()?;
     let same_server = url.scheme() == api.scheme()
@@ -127,7 +129,7 @@ fn allowed_image(url: Option<&str>) -> Option<String> {
     (same_server || igdb).then(|| url.to_string())
 }
 
-fn author(user: User) -> Author {
+pub(crate) fn author(user: User) -> Author {
     Author {
         avatar_url: allowed_image(user.avatar_url.as_deref()),
         username: user.username,
@@ -185,6 +187,8 @@ fn feed_comment(comment: Comment, viewer_id: &str) -> FeedComment {
             .and_then(|image| allowed_image(Some(&image.url)))
             .map(|url| Image { url, aspect_ratio: None }),
         created_at: comment.created_at,
+        like_count: comment.like_count,
+        liked_by_me: comment.liked_by_me,
         replies: comment
             .replies
             .into_iter()
@@ -208,7 +212,7 @@ fn new_seed() -> String {
     format!("{nanos:x}")
 }
 
-async fn fail(app: &AppHandle, error: ApiError) -> String {
+pub(crate) async fn fail(app: &AppHandle, error: ApiError) -> String {
     auth::api_error(app, error).await
 }
 
@@ -286,6 +290,51 @@ pub async fn like_post(app: AppHandle, post_id: String, liked: bool) -> Result<L
     }
 }
 
+/// One post, for opening it from a notification. `postGone` when it was
+/// deleted or is no longer visible.
+#[tauri::command]
+pub async fn get_post(app: AppHandle, post_id: String) -> Result<FeedPost, String> {
+    let token = auth::required_token(&app)?;
+    let viewer = signed_in_user(&app).ok_or("signedOut")?;
+    if !api::valid_id(&post_id) {
+        return Err("failed".to_string());
+    }
+    match app.state::<Auth>().api().post(&token, &post_id).await {
+        Ok(Some(post)) => Ok(feed_post(post, &viewer.id)),
+        Ok(None) => Err("postGone".to_string()),
+        Err(error) => Err(fail(&app, error).await),
+    }
+}
+
+/// Deletes one of the viewer's own posts.
+#[tauri::command]
+pub async fn delete_post(app: AppHandle, post_id: String) -> Result<(), String> {
+    let token = auth::required_token(&app)?;
+    if !api::valid_id(&post_id) {
+        return Err("failed".to_string());
+    }
+    match app.state::<Auth>().api().delete_post(&token, &post_id).await {
+        Ok(()) => Ok(()),
+        Err(PostError::Rejected(message)) => Err(format!("server:{message}")),
+        Err(PostError::Api(error)) => Err(fail(&app, error).await),
+    }
+}
+
+#[tauri::command]
+pub async fn like_comment(app: AppHandle, comment_id: String, liked: bool) -> Result<Likes, String> {
+    let token = auth::required_token(&app)?;
+    if !api::valid_id(&comment_id) {
+        return Err("failed".to_string());
+    }
+    match app.state::<Auth>().api().set_comment_like(&token, &comment_id, liked).await {
+        Ok(comment) => Ok(Likes {
+            like_count: comment.like_count,
+            liked_by_me: comment.liked_by_me,
+        }),
+        Err(error) => Err(fail(&app, error).await),
+    }
+}
+
 #[tauri::command]
 pub async fn post_comments(app: AppHandle, post_id: String) -> Result<Comments, String> {
     let token = auth::required_token(&app)?;
@@ -341,7 +390,27 @@ pub async fn add_comment(
 
 #[cfg(test)]
 mod tests {
-    use super::allowed_image;
+    use super::{allowed_image, feed_comment};
+    use crate::api::Comment;
+
+    #[test]
+    fn comment_mapping_keeps_likes_and_ownership() {
+        let comment: Comment = serde_json::from_str(
+            r#"{"id":"c1","content":"hi","likeCount":2,"likedByMe":true,"createdAt":"2026-11-20T10:00:00.000Z",
+            "author":{"id":"me","username":"me","displayName":"Me","avatarUrl":"https://example.com/a.png"},
+            "replies":[{"id":"c2","content":null,"likeCount":1,"likedByMe":false,"createdAt":"2026-11-20T10:01:00.000Z",
+            "author":{"id":"u2","username":"bo","displayName":"Bo"}}]}"#,
+        )
+        .unwrap();
+        let mapped = feed_comment(comment, "me");
+        assert!(mapped.mine);
+        assert_eq!((mapped.like_count, mapped.liked_by_me), (2, true));
+        assert_eq!(mapped.author.avatar_url, None);
+        let reply = &mapped.replies[0];
+        assert!(!reply.mine);
+        assert_eq!(reply.content, "");
+        assert_eq!((reply.like_count, reply.liked_by_me), (1, false));
+    }
 
     #[test]
     fn only_server_and_igdb_images_pass() {
