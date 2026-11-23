@@ -10,6 +10,7 @@ export function App() {
   const [info, setInfo] = useState<AppInfo | null>(null);
   const [auth, setAuth] = useState<AuthView>({ state: "loading" });
   const [busy, setBusy] = useState(false);
+  const [closing, setClosing] = useState(false);
   const [shownCount, setShownCount] = useState(0);
   const [composeCount, setComposeCount] = useState(0);
   // Counts openings; alternating between two identical animations
@@ -32,6 +33,7 @@ export function App() {
       // answers asynchronously), so refresh it each time the overlay opens.
       native.onShown(() => {
         native.appInfo().then(setInfo);
+        setClosing(false);
         setOpenings((count) => count + 1);
         setShownCount((count) => count + 1);
         requestAnimationFrame(focusPrimary);
@@ -64,6 +66,17 @@ export function App() {
     action().finally(() => setBusy(false));
   };
 
+  // The X button: the first times, explain that the app stays in the tray.
+  const close = () => (info.closeNoticeSeen ? native.hide() : setClosing(true));
+  const confirmClose = (dontShowAgain: boolean) => {
+    setClosing(false);
+    if (dontShowAgain) {
+      setInfo({ ...info, closeNoticeSeen: true });
+      native.dismissCloseNotice().catch(() => {});
+    }
+    native.hide();
+  };
+
   const dismissTips = () => {
     setInfo({ ...info, tipsSeen: true });
     native.dismissTips().catch(() => {});
@@ -86,7 +99,7 @@ export function App() {
             >
               <Icon name="settings" />
             </button>
-            <button class="icon-button" aria-label={t.close} title={`${t.close} (Esc)`} onClick={() => native.hide()}>
+            <button class="icon-button" aria-label={t.close} title={`${t.close} (Esc)`} onClick={close}>
               <Icon name="close" />
             </button>
           </div>
@@ -122,6 +135,9 @@ export function App() {
             <span class="version">v{info.version}</span>
           )}
         </footer>
+        {closing && (
+          <CloseNotice t={t} toggle={info.hotkey.toggle} onConfirm={confirmClose} onCancel={() => setClosing(false)} />
+        )}
       </main>
     </ToastProvider>
   );
@@ -204,6 +220,62 @@ function Body({ t, info, auth, busy, run, shownCount, composeCount, onDismissTip
         </div>
       );
   }
+}
+
+/** Shown when the panel is closed with X, until "Don't show this again". */
+function CloseNotice({
+  t,
+  toggle,
+  onConfirm,
+  onCancel,
+}: {
+  t: Strings;
+  toggle: string | null;
+  onConfirm: (dontShowAgain: boolean) => void;
+  onCancel: () => void;
+}) {
+  const [dontShowAgain, setDontShowAgain] = useState(false);
+  const confirm = useRef<HTMLButtonElement>(null);
+  useEffect(() => confirm.current?.focus(), []);
+  // Keys stay in the notice: Esc cancels it instead of closing the panel,
+  // and the panel's own keys (1 to 6 set the status) do not fire behind it.
+  const onKeyDown = (event: KeyboardEvent) => {
+    event.stopPropagation();
+    if (event.key === "Escape") onCancel();
+  };
+  return (
+    <div class="modal-backdrop" onClick={(event) => event.target === event.currentTarget && onCancel()}>
+      <div
+        class="modal"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="close-notice-title"
+        aria-describedby="close-notice-body"
+        onKeyDown={onKeyDown}
+      >
+        <h2 id="close-notice-title">{t.closeNoticeTitle}</h2>
+        <p id="close-notice-body" class="muted">
+          {toggle ? t.closeNoticeBody(toggle) : t.closeNoticeBodyNoShortcut}
+        </p>
+        <label class="checkbox">
+          <input
+            type="checkbox"
+            checked={dontShowAgain}
+            onChange={(event) => setDontShowAgain(event.currentTarget.checked)}
+          />
+          {t.dontShowAgain}
+        </label>
+        <div class="actions">
+          <button ref={confirm} class="button primary" onClick={() => onConfirm(dontShowAgain)}>
+            {t.closePanel}
+          </button>
+          <button class="button subtle" onClick={onCancel}>
+            {t.cancel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 /** First-run list of the panel's keys, until dismissed. */

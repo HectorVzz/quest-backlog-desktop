@@ -348,10 +348,7 @@ pub async fn create_post(
 /// Opens a post on the website and gets the overlay out of the way.
 #[tauri::command]
 pub fn open_post(app: AppHandle, post_id: String) -> Result<(), String> {
-    let valid = !post_id.is_empty()
-        && post_id.len() <= 64
-        && post_id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
-    if !valid {
+    if !crate::api::valid_id(&post_id) {
         return Err("failed".to_string());
     }
     let url = format!("{}/post/{post_id}", config::web_base());

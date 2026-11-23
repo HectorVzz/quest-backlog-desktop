@@ -51,6 +51,10 @@ pub struct Preferences {
     pub language: Option<String>,
     /// Read from the system, which is the source of truth for it.
     pub start_with_system: bool,
+    /// The shortcut tips in the quick panel.
+    pub show_tips: bool,
+    /// The notice shown when the panel is closed with its X button.
+    pub show_close_notice: bool,
     /// What is actually bound right now.
     pub hotkeys: HotkeyStatus,
 }
@@ -64,6 +68,8 @@ pub struct PreferencesInput {
     pub screenshot_folder: Option<String>,
     pub language: Option<String>,
     pub start_with_system: bool,
+    pub show_tips: bool,
+    pub show_close_notice: bool,
 }
 
 fn starts_with_system(app: &AppHandle) -> bool {
@@ -78,6 +84,8 @@ fn view(app: &AppHandle, settings: &Settings) -> Preferences {
         screenshot_folder: settings::screenshot_folder(app, settings).map(|path| path.display().to_string()),
         language: settings.language.clone(),
         start_with_system: starts_with_system(app),
+        show_tips: !settings.tips_seen,
+        show_close_notice: !settings.close_notice_seen,
         hotkeys: hotkey::status(app),
     }
 }
@@ -124,7 +132,8 @@ pub fn update_preferences(app: AppHandle, input: PreferencesInput) -> Result<Pre
         save_screenshots: input.save_screenshots,
         screenshot_folder: folder,
         language: input.language.filter(|language| language == "en" || language == "es"),
-        tips_seen: previous.tips_seen,
+        tips_seen: !input.show_tips,
+        close_notice_seen: !input.show_close_notice,
     };
 
     let hotkeys_changed =

@@ -56,6 +56,8 @@ export interface AppInfo {
   hotkey: HotkeyStatus;
   /** The first-run shortcut tips were dismissed. */
   tipsSeen: boolean;
+  /** The close notice was turned off. */
+  closeNoticeSeen: boolean;
 }
 
 /** Fractions (0 to 1) of the whole capture's width and height. */
@@ -91,6 +93,10 @@ export interface Preferences {
   screenshotFolder: string | null;
   language: "en" | "es" | null;
   startWithSystem: boolean;
+  /** The shortcut tips in the quick panel. */
+  showTips: boolean;
+  /** The notice shown when the panel is closed with its X button. */
+  showCloseNotice: boolean;
   hotkeys: HotkeyStatus;
 }
 
@@ -103,11 +109,66 @@ export interface NewPost {
   withScreenshot: boolean;
 }
 
+export interface Author {
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
+}
+
+export interface FeedImage {
+  url: string;
+  aspectRatio: number | null;
+}
+
+export interface FeedPost {
+  id: string;
+  author: Author;
+  mine: boolean;
+  game: Game | null;
+  content: string;
+  spoiler: boolean;
+  createdAt: string;
+  kind: "text" | "review" | "status-update";
+  status: StatusKey | null;
+  hoursPlayed: number | null;
+  rating: number | null;
+  image: FeedImage | null;
+  hasVideo: boolean;
+  likeCount: number;
+  likedByMe: boolean;
+  commentCount: number;
+}
+
+export interface FeedPage {
+  posts: FeedPost[];
+  /** Pass back for the next page; `null` at the end. */
+  next: string | null;
+}
+
+export type FeedView = "feed" | "following";
+
+export interface FeedComment {
+  id: string;
+  author: Author;
+  mine: boolean;
+  content: string;
+  image: FeedImage | null;
+  createdAt: string;
+  replies: FeedComment[];
+}
+
+export interface Comments {
+  comments: FeedComment[];
+  /** Comments and replies on the post, including ones not shown. */
+  total: number;
+}
+
 // Commands that can fail reject with a key from `errors` in i18n.ts, or
 // `server:<message>`; show them with `errorMessage`.
 export const native = {
   appInfo: () => invoke<AppInfo>("get_app_info"),
   dismissTips: () => invoke<void>("dismiss_tips"),
+  dismissCloseNotice: () => invoke<void>("dismiss_close_notice"),
   auth: () => invoke<AuthView>("get_auth"),
   startSignIn: () => invoke<void>("start_sign_in"),
   cancelSignIn: () => invoke<void>("cancel_sign_in"),
@@ -133,6 +194,15 @@ export const native = {
   cropScreenshot: (crop: CropRect | null) => invoke<void>("crop_screenshot", { crop }),
   createPost: (post: NewPost) => invoke<string>("create_post", { ...post }),
   openPost: (postId: string) => invoke<void>("open_post", { postId }),
+
+  feedPage: (view: FeedView, next: string | null) => invoke<FeedPage>("feed_page", { view, next }),
+  myPostsPage: (next: string | null) => invoke<FeedPage>("my_posts_page", { next }),
+  likePost: (postId: string, liked: boolean) =>
+    invoke<{ likeCount: number; likedByMe: boolean }>("like_post", { postId, liked }),
+  postComments: (postId: string) => invoke<Comments>("post_comments", { postId }),
+  /** `parentId` makes it a reply to that top-level comment. */
+  addComment: (postId: string, content: string, parentId: string | null) =>
+    invoke<FeedComment>("add_comment", { postId, content, parentId }),
 
   openPreferences: () => invoke<void>("open_preferences"),
   closePreferences: () => invoke<void>("close_preferences"),
