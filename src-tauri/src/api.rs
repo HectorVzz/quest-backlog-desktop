@@ -84,6 +84,93 @@ pub struct CreatedPost {
     pub id: String,
 }
 
+/// A post as the feed endpoints return it (only the fields the app shows).
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Post {
+    pub id: String,
+    #[serde(default)]
+    pub content: String,
+    /// Legacy single image; newer posts use `media`.
+    #[serde(default)]
+    pub image_url: Option<String>,
+    #[serde(default)]
+    pub media: Vec<PostMedia>,
+    #[serde(default)]
+    pub like_count: u32,
+    #[serde(default)]
+    pub comment_count: u32,
+    #[serde(default)]
+    pub liked_by_me: bool,
+    /// "text", "review" or "status-update".
+    #[serde(rename = "type", default)]
+    pub kind: String,
+    #[serde(default)]
+    pub status: Option<String>,
+    #[serde(default)]
+    pub hours_played: Option<f64>,
+    #[serde(default)]
+    pub rating: Option<f64>,
+    #[serde(default)]
+    pub spoiler: bool,
+    pub created_at: String,
+    pub author: User,
+    #[serde(default)]
+    pub game: Option<Game>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PostMedia {
+    /// "image" or "external_video".
+    pub kind: String,
+    #[serde(default)]
+    pub canonical_url: String,
+    #[serde(default)]
+    pub aspect_ratio: Option<f64>,
+}
+
+/// The home feed pages by `next_cursor`, a user's posts by `next_offset`.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PostPage {
+    pub items: Vec<Post>,
+    #[serde(default)]
+    pub next_offset: Option<u32>,
+    #[serde(default)]
+    pub next_cursor: Option<String>,
+    #[serde(default)]
+    pub has_more: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Comment {
+    pub id: String,
+    #[serde(default)]
+    pub content: Option<String>,
+    #[serde(default)]
+    pub image: Option<CommentImage>,
+    pub created_at: String,
+    pub author: User,
+    #[serde(default)]
+    pub replies: Vec<Comment>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CommentImage {
+    pub url: String,
+}
+
+/// The latest comments of a post, oldest first.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommentPage {
+    pub items: Vec<Comment>,
+    #[serde(default)]
+    pub total_count: u32,
+}
+
 pub struct NewPost<'a> {
     pub content: &'a str,
     pub game_id: Option<&'a str>,
@@ -386,20 +473,106 @@ impl Api {
             .send()
             .await
             .map_err(|error| PostError::Api(network(error)))?;
-
-        if response.status() == StatusCode::BAD_REQUEST {
-            let message = response
-                .json::<ErrorBody>()
-                .await
-                .ok()
-                .and_then(|body| body.message());
-            return Err(match message {
-                Some(message) => PostError::Rejected(message),
-                None => PostError::Api(ApiError::Failed),
-            });
-        }
-        json(response).await.map_err(PostError::Api)
+        rejectable_json(response).await
     }
+
+    /// A page of the home feed. `view` is "feed" (For you) or "following".
+    pub async fn feed_page(
+        &self,
+        token: &str,
+        view: &str,
+        seed: &str,
+        cursor: Option<&str>,
+    ) -> Result<PostPage, ApiError> {
+        let mut url = self.endpoint(&["posts", "feed-page"]);
+        {
+            let mut query = url.query_pairs_mut();
+            query
+                .append_pair("view", view)
+                .append_pair("seed", seed)
+                .append_pair("limit", &PAGE_SIZE.to_string());
+            if let Some(cursor) = cursor {
+                query.append_pair("cursor", cursor);
+            }
+        }
+        let response = bearer(self.client.get(url), token).send().await.map_err(network)?;
+        json(response).await
+    }
+
+    /// A page of one user's posts, newest first.
+    pub async fn user_posts_page(&self, token: &str, user_id: &str, offset: u32) -> Result<PostPage, ApiError> {
+        let mut url = self.endpoint(&["posts", "user", user_id, "page"]);
+        url.query_pairs_mut()
+            .append_pair("offset", &offset.to_string())
+            .append_pair("limit", &PAGE_SIZE.to_string());
+        let response = bearer(self.client.get(url), token).send().await.map_err(network)?;
+        json(response).await
+    }
+
+    /// Likes or unlikes a post; returns the post with its new counts.
+    pub async fn set_post_like(&self, token: &str, post_id: &str, liked: bool) -> Result<Post, ApiError> {
+        let url = self.endpoint(&["posts", post_id, "like"]);
+        let request = if liked { self.client.post(url) } else { self.client.delete(url) };
+        let response = bearer(request, token).send().await.map_err(network)?;
+        json(response).await
+    }
+
+    /// The latest comments of a post, with their replies.
+    pub async fn comments(&self, token: &str, post_id: &str) -> Result<CommentPage, ApiError> {
+        let mut url = self.endpoint(&["comments", "post", post_id]);
+        url.query_pairs_mut().append_pair("limit", &COMMENTS_PAGE_SIZE.to_string());
+        let response = bearer(self.client.get(url), token).send().await.map_err(network)?;
+        json(response).await
+    }
+
+    /// A comment on a post, or a reply when `parent_id` names a top-level
+    /// comment.
+    pub async fn create_comment(
+        &self,
+        token: &str,
+        post_id: &str,
+        content: &str,
+        parent_id: Option<&str>,
+    ) -> Result<Comment, PostError> {
+        let mut body = json!({ "content": content });
+        if let Some(parent) = parent_id {
+            body["parentCommentId"] = json!(parent);
+        }
+        let response = bearer(self.client.post(self.endpoint(&["comments", "post", post_id])), token)
+            .json(&body)
+            .send()
+            .await
+            .map_err(|error| PostError::Api(network(error)))?;
+        rejectable_json(response).await
+    }
+}
+
+/// Posts per feed page, as on the website.
+const PAGE_SIZE: u32 = 10;
+const COMMENTS_PAGE_SIZE: u32 = 20;
+
+/// A 400 carries a message for the user (quota, moderation, validation).
+async fn rejectable_json<T: DeserializeOwned>(response: Response) -> Result<T, PostError> {
+    if response.status() == StatusCode::BAD_REQUEST {
+        let message = response
+            .json::<ErrorBody>()
+            .await
+            .ok()
+            .and_then(|body| body.message());
+        return Err(match message {
+            Some(message) => PostError::Rejected(message),
+            None => PostError::Api(ApiError::Failed),
+        });
+    }
+    json(response).await.map_err(PostError::Api)
+}
+
+/// Whether an id from the webview looks like a server id (cuid or uuid),
+/// before it goes into a URL.
+pub fn valid_id(id: &str) -> bool {
+    !id.is_empty()
+        && id.len() <= 64
+        && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
 }
 
 #[cfg(test)]

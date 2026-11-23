@@ -20,7 +20,39 @@ pub fn show(app: &AppHandle) {
         let _ = window.show();
         let _ = window.set_focus();
         let _ = window.emit(SHOWN_EVENT, ());
+        #[cfg(target_os = "linux")]
+        if is_wayland() {
+            remap_first_show(app);
+        }
     }
+}
+
+/// On KDE the first map of the layer surface never draws a frame: it is
+/// configured but no buffer is ever attached, so the panel stays invisible
+/// while the app thinks it is shown. Every later map draws at once
+/// (checked with WAYLAND_DEBUG). So the first show is redone once, after
+/// the compositor has answered it; nothing was on screen in between.
+#[cfg(target_os = "linux")]
+fn remap_first_show(app: &AppHandle) {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    static REMAPPED: AtomicBool = AtomicBool::new(false);
+    if REMAPPED.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    let handle = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(150));
+        let target = handle.clone();
+        let _ = handle.run_on_main_thread(move || {
+            if let Some(window) = window(&target) {
+                if window.is_visible().unwrap_or(false) {
+                    let _ = window.hide();
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                }
+            }
+        });
+    });
 }
 
 /// Hides the panel at once. No closing animation: when the panel is shown

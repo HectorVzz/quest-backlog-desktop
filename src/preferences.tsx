@@ -161,6 +161,23 @@ function PreferencesForm({ t }: { t: Strings }) {
           />
           {t.startWithSystem}
         </label>
+        <p class="muted small">{t.startWithSystemHint}</p>
+        <label class="checkbox">
+          <input
+            type="checkbox"
+            checked={draft.showTips}
+            onChange={(event) => update({ showTips: event.currentTarget.checked })}
+          />
+          {t.showTips}
+        </label>
+        <label class="checkbox">
+          <input
+            type="checkbox"
+            checked={draft.showCloseNotice}
+            onChange={(event) => update({ showCloseNotice: event.currentTarget.checked })}
+          />
+          {t.showCloseNotice}
+        </label>
       </section>
 
       <section class="pref-section">

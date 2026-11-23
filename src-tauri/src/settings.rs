@@ -25,6 +25,9 @@ pub struct Settings {
     pub language: Option<String>,
     /// The quick panel's first-run shortcut tips were dismissed.
     pub tips_seen: bool,
+    /// "Don't show this again" was ticked on the notice shown when the
+    /// panel is closed with its X button.
+    pub close_notice_seen: bool,
 }
 
 impl Default for Settings {
@@ -38,6 +41,7 @@ impl Default for Settings {
             screenshot_folder: None,
             language: None,
             tips_seen: false,
+            close_notice_seen: false,
         }
     }
 }

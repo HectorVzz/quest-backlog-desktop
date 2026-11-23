@@ -25,11 +25,23 @@ const PATHS = {
   arrow: "M5 12h14M13 6l6 6-6 6",
   back: "M19 12H5M11 6l-6 6 6 6",
   refresh: "M19.5 12a7.5 7.5 0 1 1-2.2-5.3M19.5 4v4h-4",
+  heart: "M12 19.5s-7.5-4.6-7.5-10A4.25 4.25 0 0 1 12 6.8a4.25 4.25 0 0 1 7.5 2.7c0 5.4-7.5 10-7.5 10z",
+  comment: "M5 5.5h14a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-8l-4.5 3.5v-3.5H5a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1z",
+  external: "M14 4h6v6M20 4l-9 9M18 14v4.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6H10",
 } as const;
 
 export type IconName = keyof typeof PATHS;
 
-export function Icon({ name, size = 18 }: { name: IconName | StatusKey; size?: number }) {
+export function Icon({
+  name,
+  size = 18,
+  filled = false,
+}: {
+  name: IconName | StatusKey;
+  size?: number;
+  /** Fill the shape too, for an "on" state such as a liked heart. */
+  filled?: boolean;
+}) {
   return (
     <svg
       class="icon"
@@ -37,7 +49,7 @@ export function Icon({ name, size = 18 }: { name: IconName | StatusKey; size?: n
       width={size}
       height={size}
       aria-hidden="true"
-      fill="none"
+      fill={filled ? "currentColor" : "none"}
       stroke="currentColor"
       stroke-width="1.8"
       stroke-linecap="round"
