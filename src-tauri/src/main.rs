@@ -13,6 +13,7 @@ mod feed;
 mod games;
 mod hotkey;
 mod known_games;
+mod notifications;
 mod overlay;
 mod preferences;
 mod screenshot;
@@ -166,6 +167,14 @@ fn main() {
             feed::like_post,
             feed::post_comments,
             feed::add_comment,
+            feed::like_comment,
+            feed::delete_post,
+            feed::get_post,
+            notifications::unread_notifications,
+            notifications::notifications,
+            notifications::mark_notification_read,
+            notifications::mark_all_notifications_read,
+            notifications::open_profile,
             get_app_info,
             dismiss_tips,
             dismiss_close_notice,

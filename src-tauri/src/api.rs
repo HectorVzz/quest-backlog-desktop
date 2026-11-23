@@ -154,6 +154,10 @@ pub struct Comment {
     pub created_at: String,
     pub author: User,
     #[serde(default)]
+    pub like_count: u32,
+    #[serde(default)]
+    pub liked_by_me: bool,
+    #[serde(default)]
     pub replies: Vec<Comment>,
 }
 
@@ -169,6 +173,36 @@ pub struct CommentPage {
     pub items: Vec<Comment>,
     #[serde(default)]
     pub total_count: u32,
+}
+
+/// A notification as `GET /notifications` returns it.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Notification {
+    pub id: String,
+    /// "like", "comment_like", "comment", "comment_reply", "mention" or
+    /// "follow".
+    #[serde(rename = "type")]
+    pub kind: String,
+    /// `None` when the account that caused it was deleted.
+    #[serde(default)]
+    pub actor: Option<User>,
+    #[serde(default)]
+    pub post_id: Option<String>,
+    #[serde(default)]
+    pub comment_id: Option<String>,
+    /// The comment's first 80 characters, for comments, replies and
+    /// mentions in comments.
+    #[serde(default)]
+    pub comment_body_preview: Option<String>,
+    #[serde(default)]
+    pub read_at: Option<String>,
+    pub created_at: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct UnreadCount {
+    count: u32,
 }
 
 pub struct NewPost<'a> {
@@ -249,6 +283,15 @@ fn status_error(status: StatusCode) -> ApiError {
         StatusCode::FORBIDDEN => ApiError::Forbidden,
         StatusCode::TOO_MANY_REQUESTS => ApiError::RateLimited,
         _ => ApiError::Failed,
+    }
+}
+
+/// For endpoints that answer with an empty body.
+fn empty(response: Response) -> Result<(), ApiError> {
+    if response.status().is_success() {
+        Ok(())
+    } else {
+        Err(status_error(response.status()))
     }
 }
 
@@ -525,6 +568,78 @@ impl Api {
         json(response).await
     }
 
+    /// One post, `None` when it was deleted or the viewer may not see it.
+    pub async fn post(&self, token: &str, post_id: &str) -> Result<Option<Post>, ApiError> {
+        let response = bearer(self.client.get(self.endpoint(&["posts", post_id])), token)
+            .send()
+            .await
+            .map_err(network)?;
+        optional_json(response).await
+    }
+
+    /// Deletes one of the viewer's posts. A post that is already gone
+    /// counts as deleted. A refusal (hidden by staff, not the author)
+    /// carries the server's message.
+    pub async fn delete_post(&self, token: &str, post_id: &str) -> Result<(), PostError> {
+        let response = bearer(self.client.delete(self.endpoint(&["posts", post_id])), token)
+            .send()
+            .await
+            .map_err(|error| PostError::Api(network(error)))?;
+        match response.status() {
+            status if status.is_success() => Ok(()),
+            StatusCode::NOT_FOUND => Ok(()),
+            StatusCode::FORBIDDEN | StatusCode::BAD_REQUEST => {
+                let message = response
+                    .json::<ErrorBody>()
+                    .await
+                    .ok()
+                    .and_then(|body| body.message());
+                Err(match message {
+                    Some(message) => PostError::Rejected(message),
+                    None => PostError::Api(ApiError::Forbidden),
+                })
+            }
+            status => Err(PostError::Api(status_error(status))),
+        }
+    }
+
+    /// Likes or unlikes a comment; returns the comment with its new counts.
+    pub async fn set_comment_like(&self, token: &str, comment_id: &str, liked: bool) -> Result<Comment, ApiError> {
+        let url = self.endpoint(&["comments", comment_id, "like"]);
+        let request = if liked { self.client.post(url) } else { self.client.delete(url) };
+        let response = bearer(request, token).send().await.map_err(network)?;
+        json(response).await
+    }
+
+    /// How many of the viewer's notifications are unread.
+    pub async fn unread_notifications(&self, token: &str) -> Result<u32, ApiError> {
+        let url = self.endpoint(&["notifications", "unread-count"]);
+        let response = bearer(self.client.get(url), token).send().await.map_err(network)?;
+        json::<UnreadCount>(response).await.map(|body| body.count)
+    }
+
+    /// The viewer's latest notifications, newest first. Reading them does
+    /// not mark them read.
+    pub async fn notifications(&self, token: &str) -> Result<Vec<Notification>, ApiError> {
+        let mut url = self.endpoint(&["notifications"]);
+        url.query_pairs_mut()
+            .append_pair("limit", &NOTIFICATIONS_PAGE_SIZE.to_string());
+        let response = bearer(self.client.get(url), token).send().await.map_err(network)?;
+        json(response).await
+    }
+
+    pub async fn mark_notification_read(&self, token: &str, notification_id: &str) -> Result<(), ApiError> {
+        let url = self.endpoint(&["notifications", notification_id, "read"]);
+        let response = bearer(self.client.patch(url), token).send().await.map_err(network)?;
+        empty(response)
+    }
+
+    pub async fn mark_all_notifications_read(&self, token: &str) -> Result<(), ApiError> {
+        let url = self.endpoint(&["notifications", "read-all"]);
+        let response = bearer(self.client.post(url), token).send().await.map_err(network)?;
+        empty(response)
+    }
+
     /// A comment on a post, or a reply when `parent_id` names a top-level
     /// comment.
     pub async fn create_comment(
@@ -550,6 +665,7 @@ impl Api {
 /// Posts per feed page, as on the website.
 const PAGE_SIZE: u32 = 10;
 const COMMENTS_PAGE_SIZE: u32 = 20;
+const NOTIFICATIONS_PAGE_SIZE: u32 = 20;
 
 /// A 400 carries a message for the user (quota, moderation, validation).
 async fn rejectable_json<T: DeserializeOwned>(response: Response) -> Result<T, PostError> {
@@ -577,7 +693,37 @@ pub fn valid_id(id: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::Api;
+    use super::{Api, Comment, Notification};
+
+    #[test]
+    fn comment_keeps_like_fields() {
+        let comment: Comment = serde_json::from_str(
+            r#"{"id":"c1","postId":"p1","content":"hi","image":null,"likeCount":3,"likedByMe":true,
+            "createdAt":"2026-11-20T10:00:00.000Z","author":{"id":"u1","username":"ana","displayName":"Ana","avatarUrl":null},
+            "replies":[{"id":"c2","content":"yo","createdAt":"2026-11-20T10:01:00.000Z",
+            "author":{"id":"u2","username":"bo","displayName":"Bo","avatarUrl":null},"replies":[]}]}"#,
+        )
+        .unwrap();
+        assert_eq!((comment.like_count, comment.liked_by_me), (3, true));
+        // Missing counts read as zero rather than failing the whole page.
+        assert_eq!((comment.replies[0].like_count, comment.replies[0].liked_by_me), (0, false));
+    }
+
+    #[test]
+    fn notification_parses_server_shape() {
+        let list: Vec<Notification> = serde_json::from_str(
+            r#"[{"id":"n1","type":"comment_reply","actor":{"id":"u1","username":"ana","displayName":"Ana","avatarUrl":null},
+            "postId":"p1","commentId":"c1","commentBodyPreview":"nice","readAt":null,"createdAt":"2026-11-20T10:00:00.000Z"},
+            {"id":"n2","type":"follow","actor":null,"postId":null,"commentId":null,"commentBodyPreview":null,
+            "readAt":"2026-11-21T10:00:00.000Z","createdAt":"2026-11-20T09:00:00.000Z"}]"#,
+        )
+        .unwrap();
+        assert_eq!(list[0].kind, "comment_reply");
+        assert_eq!(list[0].post_id.as_deref(), Some("p1"));
+        assert!(list[0].read_at.is_none());
+        assert!(list[1].actor.is_none());
+        assert!(list[1].read_at.is_some());
+    }
 
     #[test]
     fn endpoint_appends_encoded_segments() {

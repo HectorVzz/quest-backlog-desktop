@@ -154,6 +154,8 @@ export interface FeedComment {
   content: string;
   image: FeedImage | null;
   createdAt: string;
+  likeCount: number;
+  likedByMe: boolean;
   replies: FeedComment[];
 }
 
@@ -161,6 +163,31 @@ export interface Comments {
   comments: FeedComment[];
   /** Comments and replies on the post, including ones not shown. */
   total: number;
+}
+
+export type NotificationKind = "like" | "commentLike" | "comment" | "commentReply" | "mention" | "follow";
+
+/** What opening a notification shows. */
+export type NotificationTarget =
+  | { kind: "post"; postId: string; commentId: string | null }
+  | { kind: "profile"; username: string }
+  | { kind: "none" };
+
+export interface PanelNotification {
+  id: string;
+  kind: NotificationKind;
+  /** `null` for a deleted account. */
+  actor: Author | null;
+  /** The start of the comment, for comments, replies and mentions. */
+  preview: string | null;
+  read: boolean;
+  createdAt: string;
+  target: NotificationTarget;
+}
+
+export interface Likes {
+  likeCount: number;
+  likedByMe: boolean;
 }
 
 // Commands that can fail reject with a key from `errors` in i18n.ts, or
@@ -197,12 +224,22 @@ export const native = {
 
   feedPage: (view: FeedView, next: string | null) => invoke<FeedPage>("feed_page", { view, next }),
   myPostsPage: (next: string | null) => invoke<FeedPage>("my_posts_page", { next }),
-  likePost: (postId: string, liked: boolean) =>
-    invoke<{ likeCount: number; likedByMe: boolean }>("like_post", { postId, liked }),
+  likePost: (postId: string, liked: boolean) => invoke<Likes>("like_post", { postId, liked }),
+  /** Rejects with `postGone` when the post was deleted or is hidden. */
+  getPost: (postId: string) => invoke<FeedPost>("get_post", { postId }),
+  /** Only the viewer's own posts. */
+  deletePost: (postId: string) => invoke<void>("delete_post", { postId }),
+  likeComment: (commentId: string, liked: boolean) => invoke<Likes>("like_comment", { commentId, liked }),
   postComments: (postId: string) => invoke<Comments>("post_comments", { postId }),
   /** `parentId` makes it a reply to that top-level comment. */
   addComment: (postId: string, content: string, parentId: string | null) =>
     invoke<FeedComment>("add_comment", { postId, content, parentId }),
+
+  unreadNotifications: () => invoke<number>("unread_notifications"),
+  notifications: () => invoke<PanelNotification[]>("notifications"),
+  markNotificationRead: (notificationId: string) => invoke<void>("mark_notification_read", { notificationId }),
+  markAllNotificationsRead: () => invoke<void>("mark_all_notifications_read"),
+  openProfile: (username: string) => invoke<void>("open_profile", { username }),
 
   openPreferences: () => invoke<void>("open_preferences"),
   closePreferences: () => invoke<void>("close_preferences"),

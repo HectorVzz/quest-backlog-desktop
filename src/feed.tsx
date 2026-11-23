@@ -1,6 +1,7 @@
-// The Feed and My posts tabs: read posts, like them and comment, without
-// leaving the game. Anything else (profiles, older comments, videos) opens
-// the post on the website.
+// The Feed and My posts tabs: read posts, like them and their comments,
+// comment, and delete your own posts, without leaving the game. Anything
+// else (profiles, older comments, videos, editing) opens the post on the
+// website. `PostCard` is also used to open a post from a notification.
 
 import { useEffect, useRef, useState } from "preact/hooks";
 
@@ -8,6 +9,7 @@ import { formatHours } from "./game-panel";
 import { errorMessage, type Strings } from "./i18n";
 import { Icon } from "./icons";
 import { native, type Author, type FeedComment, type FeedPost, type FeedView } from "./native";
+import { useToast } from "./toast";
 
 // Mirrors COMMENT_MAX_CHARS in src-tauri/src/feed.rs and the API limit.
 const MAX_COMMENT_CHARS = 500;
@@ -72,6 +74,8 @@ export function FeedTab({ t, source, active, shownCount }: Props) {
 
   const update = (post: FeedPost) =>
     setList((current) => ({ ...current, posts: current.posts.map((p) => (p.id === post.id ? post : p)) }));
+  const remove = (postId: string) =>
+    setList((current) => ({ ...current, posts: current.posts.filter((p) => p.id !== postId) }));
 
   const empty = source === "mine" ? t.myPostsEmpty : view === "following" ? t.followingEmpty : t.feedEmpty;
 
@@ -115,7 +119,7 @@ export function FeedTab({ t, source, active, shownCount }: Props) {
       <ul class="post-list">
         {list.posts.map((post) => (
           <li key={post.id}>
-            <PostCard t={t} post={post} onChange={update} />
+            <PostCard t={t} post={post} onChange={update} onRemove={remove} />
           </li>
         ))}
       </ul>
@@ -131,12 +135,56 @@ export function FeedTab({ t, source, active, shownCount }: Props) {
   );
 }
 
-function PostCard({ t, post, onChange }: { t: Strings; post: FeedPost; onChange: (post: FeedPost) => void }) {
+interface PostCardProps {
+  t: Strings;
+  post: FeedPost;
+  onChange: (post: FeedPost) => void;
+  /** The post was deleted. */
+  onRemove: (postId: string) => void;
+  /** Start with the comments shown (opened from a notification). */
+  initiallyOpen?: boolean;
+  /** A comment to bring into view and mark once the comments load. */
+  highlight?: string | null;
+}
+
+export function PostCard({ t, post, onChange, onRemove, initiallyOpen = false, highlight = null }: PostCardProps) {
   const [revealed, setRevealed] = useState(false);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(initiallyOpen);
   const [liking, setLiking] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const deleteButton = useRef<HTMLButtonElement>(null);
+  const cancelButton = useRef<HTMLButtonElement>(null);
+  const toast = useToast();
   const hidden = post.spoiler && !revealed && !post.mine;
+
+  useEffect(() => {
+    if (confirming) cancelButton.current?.focus();
+  }, [confirming]);
+
+  const cancelDelete = () => {
+    setConfirming(false);
+    requestAnimationFrame(() => deleteButton.current?.focus());
+  };
+
+  const confirmDelete = () => {
+    if (deleting) return;
+    setDeleting(true);
+    setError(null);
+    native
+      .deletePost(post.id)
+      .then(() => {
+        toast({ text: t.postDeleted });
+        onRemove(post.id);
+      })
+      .catch((reason) => {
+        setError(errorMessage(t, reason));
+        setDeleting(false);
+        setConfirming(false);
+        requestAnimationFrame(() => deleteButton.current?.focus());
+      });
+  };
 
   const toggleLike = () => {
     if (liking) return;
@@ -231,10 +279,52 @@ function PostCard({ t, post, onChange }: { t: Strings; post: FeedPost; onChange:
           <Icon name="comment" size={16} />
           <span class="tabular">{post.commentCount}</span>
         </button>
-        <button class="post-action post-open" aria-label={t.openOnWeb} title={t.openOnWeb} onClick={() => native.openPost(post.id)}>
-          <Icon name="external" size={16} />
-        </button>
+        <span class="post-actions-end">
+          {post.mine && (
+            <button
+              ref={deleteButton}
+              class="post-action"
+              aria-label={t.deletePost}
+              title={t.deletePost}
+              aria-expanded={confirming}
+              disabled={deleting}
+              onClick={() => (confirming ? cancelDelete() : setConfirming(true))}
+            >
+              <Icon name="trash" size={16} />
+            </button>
+          )}
+          <button class="post-action" aria-label={t.openOnWeb} title={t.openOnWeb} onClick={() => native.openPost(post.id)}>
+            <Icon name="external" size={16} />
+          </button>
+        </span>
       </footer>
+
+      {confirming && (
+        <div
+          class="confirm"
+          role="group"
+          aria-labelledby={`delete-${post.id}`}
+          onKeyDown={(event) => {
+            // Esc cancels here instead of closing the panel.
+            if (event.key === "Escape") {
+              event.stopPropagation();
+              if (!deleting) cancelDelete();
+            }
+          }}
+        >
+          <p id={`delete-${post.id}`} class="confirm-text">
+            {t.deletePostConfirm}
+          </p>
+          <div class="actions">
+            <button class="button danger small" disabled={deleting} onClick={confirmDelete}>
+              {deleting ? t.deleting : t.delete}
+            </button>
+            <button ref={cancelButton} class="button subtle small" disabled={deleting} onClick={cancelDelete}>
+              {t.cancel}
+            </button>
+          </div>
+        </div>
+      )}
 
       {error && (
         <p class="error small" role="alert">
@@ -246,6 +336,7 @@ function PostCard({ t, post, onChange }: { t: Strings; post: FeedPost; onChange:
         <Thread
           t={t}
           post={post}
+          highlight={highlight}
           onAdded={() => onChange({ ...post, commentCount: post.commentCount + 1 })}
         />
       )}
@@ -253,7 +344,25 @@ function PostCard({ t, post, onChange }: { t: Strings; post: FeedPost; onChange:
   );
 }
 
-function Thread({ t, post, onAdded }: { t: Strings; post: FeedPost; onAdded: () => void }) {
+type CommentPatch = Pick<FeedComment, "likeCount" | "likedByMe">;
+
+/** Updates one comment or reply, found by id. */
+function patchComment(comments: FeedComment[], id: string, patch: CommentPatch): FeedComment[] {
+  return comments.map((comment) =>
+    comment.id === id
+      ? { ...comment, ...patch }
+      : { ...comment, replies: comment.replies.map((reply) => (reply.id === id ? { ...reply, ...patch } : reply)) },
+  );
+}
+
+interface ThreadProps {
+  t: Strings;
+  post: FeedPost;
+  highlight: string | null;
+  onAdded: () => void;
+}
+
+function Thread({ t, post, highlight, onAdded }: ThreadProps) {
   const [comments, setComments] = useState<FeedComment[] | null>(null);
   const [total, setTotal] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -261,6 +370,18 @@ function Thread({ t, post, onAdded }: { t: Strings; post: FeedPost; onAdded: () 
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const input = useRef<HTMLTextAreaElement>(null);
+  const section = useRef<HTMLElement>(null);
+
+  // Bring the comment a notification points at into view once loaded.
+  useEffect(() => {
+    if (!highlight || !comments) return;
+    section.current
+      ?.querySelector(`[data-comment="${CSS.escape(highlight)}"]`)
+      ?.scrollIntoView({ block: "nearest" });
+  }, [highlight, comments !== null]);
+
+  const changeComment = (id: string, patch: CommentPatch) =>
+    setComments((current) => patchComment(current ?? [], id, patch));
 
   useEffect(() => {
     native
@@ -304,7 +425,7 @@ function Thread({ t, post, onAdded }: { t: Strings; post: FeedPost; onAdded: () 
   };
 
   return (
-    <section class="thread" aria-label={t.comments}>
+    <section class="thread" aria-label={t.comments} ref={section}>
       {comments === null && !error && <p class="muted small">{t.loading}</p>}
       {older > 0 && (
         <button class="link-button small" onClick={() => native.openPost(post.id)}>
@@ -316,12 +437,24 @@ function Thread({ t, post, onAdded }: { t: Strings; post: FeedPost; onAdded: () 
         <ul class="comment-list">
           {comments.map((comment) => (
             <li key={comment.id}>
-              <CommentItem t={t} comment={comment} onReply={() => startReply(comment)} />
+              <CommentItem
+                t={t}
+                comment={comment}
+                highlighted={comment.id === highlight}
+                onChange={changeComment}
+                onReply={() => startReply(comment)}
+              />
               {comment.replies.length > 0 && (
                 <ul class="comment-list comment-replies">
                   {comment.replies.map((reply) => (
                     <li key={reply.id}>
-                      <CommentItem t={t} comment={reply} onReply={() => startReply(comment)} />
+                      <CommentItem
+                        t={t}
+                        comment={reply}
+                        highlighted={reply.id === highlight}
+                        onChange={changeComment}
+                        onReply={() => startReply(comment)}
+                      />
                     </li>
                   ))}
                 </ul>
@@ -376,9 +509,38 @@ function Thread({ t, post, onAdded }: { t: Strings; post: FeedPost; onAdded: () 
   );
 }
 
-function CommentItem({ t, comment, onReply }: { t: Strings; comment: FeedComment; onReply: () => void }) {
+interface CommentItemProps {
+  t: Strings;
+  comment: FeedComment;
+  highlighted: boolean;
+  onChange: (id: string, patch: CommentPatch) => void;
+  onReply: () => void;
+}
+
+function CommentItem({ t, comment, highlighted, onChange, onReply }: CommentItemProps) {
+  const [liking, setLiking] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Like a post's like: shown at once, the server's counts replace it.
+  const toggleLike = () => {
+    if (liking) return;
+    const liked = !comment.likedByMe;
+    setLiking(true);
+    setError(null);
+    const before = { likeCount: comment.likeCount, likedByMe: comment.likedByMe };
+    onChange(comment.id, { likedByMe: liked, likeCount: Math.max(0, comment.likeCount + (liked ? 1 : -1)) });
+    native
+      .likeComment(comment.id, liked)
+      .then((likes) => onChange(comment.id, likes))
+      .catch((reason) => {
+        onChange(comment.id, before);
+        setError(errorMessage(t, reason));
+      })
+      .finally(() => setLiking(false));
+  };
+
   return (
-    <div class="comment">
+    <div class="comment" data-comment={comment.id} data-highlight={highlighted || undefined}>
       <Avatar author={comment.author} small />
       <div class="comment-body">
         <p class="comment-meta">
@@ -389,15 +551,33 @@ function CommentItem({ t, comment, onReply }: { t: Strings; comment: FeedComment
         </p>
         {comment.content && <p class="comment-text">{comment.content}</p>}
         {comment.image && <img class="comment-image" src={comment.image.url} alt="" loading="lazy" />}
-        <button class="link-button small" onClick={onReply}>
-          {t.reply}
-        </button>
+        <div class="comment-actions">
+          <button
+            class="post-action comment-like"
+            aria-pressed={comment.likedByMe}
+            aria-label={comment.likedByMe ? t.unlike : t.like}
+            title={comment.likedByMe ? t.unlike : t.like}
+            disabled={liking}
+            onClick={toggleLike}
+          >
+            <Icon name="heart" size={14} filled={comment.likedByMe} />
+            {comment.likeCount > 0 && <span class="tabular">{comment.likeCount}</span>}
+          </button>
+          <button class="link-button small" onClick={onReply}>
+            {t.reply}
+          </button>
+        </div>
+        {error && (
+          <p class="error small" role="alert">
+            {error}
+          </p>
+        )}
       </div>
     </div>
   );
 }
 
-function Avatar({ author, small = false }: { author: Author; small?: boolean }) {
+export function Avatar({ author, small = false }: { author: Author; small?: boolean }) {
   const [broken, setBroken] = useState(false);
   const size = small ? "avatar avatar-small" : "avatar";
   if (author.avatarUrl && !broken) {
@@ -421,7 +601,7 @@ const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
 ];
 
 /** "3 h ago", "yesterday"; under a minute reads as "now". */
-function timeAgo(t: Strings, iso: string) {
+export function timeAgo(t: Strings, iso: string) {
   const seconds = (Date.now() - new Date(iso).getTime()) / 1000;
   if (!Number.isFinite(seconds)) return "";
   const format = new Intl.RelativeTimeFormat(t.locale, { numeric: "auto", style: "short" });

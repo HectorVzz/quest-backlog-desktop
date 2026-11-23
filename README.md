@@ -38,10 +38,13 @@ The app connects to two places only:
 
 - `quest-backlog.com`, the Quest Backlog API, and only when you do
   something: sign in, open the panel (to look up the detected game and your
-  status and hours for it), search for a game, save a status or hours,
-  post, or open the *Feed* or *My posts* tab (to load posts and comments,
-  like a post or comment on it). Post images and avatars are loaded from
-  there too.
+  status and hours for it, and how many notifications are unread), search
+  for a game, save a status or hours, post, open the *Feed* or *My posts*
+  tab (to load posts and comments, like a post or a comment, comment on it,
+  or delete one of your posts), or open the notifications (to load the
+  latest 20, open one, or mark them read). Nothing is checked while the
+  panel is closed, so the unread count is only as fresh as the last time
+  you opened it. Post images and avatars are loaded from there too.
 - `images.igdb.com`, to show game covers.
 
 Avatars or videos hosted anywhere else are not loaded; a video post shows a
@@ -56,7 +59,8 @@ What the server receives:
   matched to an executable, its Quest Backlog address name (for example
   `world-of-warcraft-forever`), to get its current record.
 - What you choose to save or post: a status, hours played, text, a
-  screenshot, a like, a comment.
+  screenshot, a like, a comment, deleting one of your posts, marking
+  notifications read.
 
 The executables you matched to games (`games.json`) stay on your computer.
 
@@ -69,17 +73,26 @@ The executables you matched to games (`games.json`) stay on your computer.
   cover and title sit at the top. Four tabs: *Status* (one-click status; the
   number keys 1 to 6 pick Playing, Completed, Platinum'd, Backlog, Dropped,
   Wishlist), *Post* (text, game, screenshot, spoiler; Ctrl+Enter posts),
-  *Feed* and *My posts*. The first time you open it, it lists these keys
+  *Feed* and *My posts*, plus a bell at the end of the tab row for
+  notifications, with the unread count on it. The first time you open it, it lists these keys
   until you press *Got it*. Closing it with X explains that the app stays in
   the tray and how to come back (the shortcut, the tray icon or the app
   launcher), until you tick *Don't show this again*. Preferences can turn
   either one back on.
 - **Feed and My posts:** the website's activity feed (*For you* and
   *Following*) and your own posts, ten at a time with *Load more*. Like a
-  post, open its comments to read the latest 20 and reply, or open it on the
+  post, open its comments to read the latest 20, like them and reply, or
+  open it on the website. Your own posts have a delete button that asks
+  for confirmation inside the post (Esc cancels); editing stays on the
   website. A tab loads when you open it and again the next time the panel
   is shown; the refresh button reloads it. Spoilers stay hidden until you
   press *Show spoiler*.
+- **Notifications:** likes on your posts and comments, comments, replies,
+  mentions and follows, the latest 20. The unread count is fetched each
+  time the panel opens; the list when you open the bell. A post
+  notification opens the post with its comments in the panel (the comment
+  it is about highlighted) and marks it read; a follow opens the
+  follower's profile on the website. *Mark all read* clears the rest.
 - **Hours played:** under the status buttons; saved on Enter or when you
   leave the field (empty keeps the saved hours). Games synced from Steam
   show Steam's hours read-only, because typing hours there would unlink
@@ -250,11 +263,16 @@ log line
   - `games.rs` detection, search, choosing a game, saving its status
   - `screenshot.rs` capture, resize and encode, optional local PNG copy
   - `compose.rs` screenshot flow and posting
-  - `feed.rs` Feed and My posts: pages of posts, likes, comments
+  - `feed.rs` Feed and My posts: pages of posts, likes, comments, comment
+    likes, deleting your posts, one post by id
+  - `notifications.rs` unread count, the latest notifications, marking them
+    read, opening a follower's profile
   - `device.rs` the computer name and OS sent at sign-in
   - `config.rs` server addresses
 - `src/`: the interface (Vite + Preact), one bundle for both windows
-  (`main.tsx` picks by window label). `i18n.ts` holds the English and
+  (`main.tsx` picks by window label). `feed.tsx` is the Feed and My posts
+  tabs and the post card; `notifications.tsx` the notifications tab, which
+  opens posts in that same card. `i18n.ts` holds the English and
   Spanish strings; `tokens.css` holds the web app's color tokens.
 - `scripts/install-local.sh`: build and install for the current Linux user.
 - `src-tauri/icons/`: the app icon. `icon.svg` is the source; the PNG
